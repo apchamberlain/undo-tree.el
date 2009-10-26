@@ -86,11 +86,12 @@ to `buffer-undo-tree'."
     (setq buffer-undo-tree (make-undo-tree)))
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
   (undo-list-to-tree)
+
   (dotimes (i arg)
-    ;; check if at top of tree
-    (if (null (undo-tree-node-undo (undo-tree-current buffer-undo-tree)))
+    ;; check if at top of undo tree
+    (if (null (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
 	(error "No further undo information")
-      ;; undo one record from tree
+      ;; undo one record from undo tree
       (primitive-undo 1 (undo-copy-list
 			 (undo-tree-node-undo
 			  (undo-tree-current buffer-undo-tree))))
@@ -98,7 +99,35 @@ to `buffer-undo-tree'."
       ;; `buffer-undo-list' and record them in current node's redo record
       (setf (undo-tree-node-redo (undo-tree-current buffer-undo-tree))
 	    (undo-list-pop-changeset))
-      ;; rewind pointer to current node
+      ;; rewind current node
       (setf (undo-tree-current buffer-undo-tree)
 	    (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
       )))
+
+
+(defun undo-tree-redo (&optional arg)
+  "Redo changes. A numeric ARG serves as a repeat count."
+  (interactive "p")
+  ;; if `buffer-undo-tree' is empty, create initial undo-tree
+  (when (null buffer-undo-tree)
+    (setq buffer-undo-tree (make-undo-tree)))
+  ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
+  (undo-list-to-tree)
+
+  (let ((current (undo-tree-current buffer-undo-tree)))
+    (dotimes (i arg)
+      ;; check if at bottom of undo tree
+      (if (null (undo-tree-node-next (undo-tree-current buffer-undo-tree)))
+	  (error "No further redo information")
+	;; advance current node
+	(setq current
+	      (setf (undo-tree-current buffer-undo-tree)
+		    (nth (undo-tree-node-branch current)
+			 (undo-tree-node-next current))))
+	;; redo one record from undo tree
+	(primitive-undo 1 (undo-copy-list (undo-tree-node-redo current)))
+	;; discard undo entries that `primitive-undo' has added to
+	;; `buffer-undo-list' since we already know how to undo from here
+	;; (note: could overwrite old undo entry instead for safety's sake?)
+	(setq buffer-undo-list nil)
+	))))
