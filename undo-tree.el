@@ -65,7 +65,7 @@ part of `buffer-undo-tree'."
     changeset))
 
 
-(defun undo-list-to-tree ()
+(defun undo-list-transfer-to-tree ()
   "Transfer entries accumulated in `buffer-undo-list'
 to `buffer-undo-tree'."
   (when buffer-undo-list
@@ -75,7 +75,13 @@ to `buffer-undo-tree'."
       (while buffer-undo-list
 	(setq node (undo-tree-grow-backwards node (undo-list-pop-changeset))))
       (setf (undo-tree-node-previous node) splice)
-      (push node (undo-tree-node-next splice)))))
+      (push node (undo-tree-node-next splice))
+      (setf (undo-tree-node-branch splice) 0))))
+
+
+(defmacro undo-tree-num-branches ()
+  "Return number of branches at current undo tree node."
+  '(length (undo-tree-node-next (undo-tree-current buffer-undo-tree))))
 
 
 (defun undo-tree-undo (&optional arg)
@@ -85,7 +91,7 @@ to `buffer-undo-tree'."
   (when (null buffer-undo-tree)
     (setq buffer-undo-tree (make-undo-tree)))
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
-  (undo-list-to-tree)
+  (undo-list-transfer-to-tree)
 
   (dotimes (i arg)
     ;; check if at top of undo tree
@@ -102,7 +108,10 @@ to `buffer-undo-tree'."
       ;; rewind current node
       (setf (undo-tree-current buffer-undo-tree)
 	    (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
-      )))
+      ))
+  ;; inform user if at branch point
+  (when (> (undo-tree-num-branches) 1)
+    (message "Undo branch point!")))
 
 
 (defun undo-tree-redo (&optional arg)
@@ -112,7 +121,7 @@ to `buffer-undo-tree'."
   (when (null buffer-undo-tree)
     (setq buffer-undo-tree (make-undo-tree)))
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
-  (undo-list-to-tree)
+  (undo-list-transfer-to-tree)
 
   (let ((current (undo-tree-current buffer-undo-tree)))
     (dotimes (i arg)
@@ -130,4 +139,24 @@ to `buffer-undo-tree'."
 	;; `buffer-undo-list' since we already know how to undo from here
 	;; (note: could overwrite old undo entry instead for safety's sake?)
 	(setq buffer-undo-list nil)
-	))))
+	)))
+  ;; inform user if at branch point
+  (when (> (undo-tree-num-branches) 1)
+    (message "Undo branch point!")))
+
+
+(defun undo-tree-switch-branch (branch)
+  "Switch to a different BRANCH of the undo tree.
+This will affect which branch to descend when *redoing* changes
+using `undo-tree-redo'."
+  (interactive (list (or (and prefix-arg (prefix-numeric-value prefix-arg))
+			 (read-number
+			  (format "Branch (0-%d): "
+				  (1- (undo-tree-num-branches))))
+			 )))
+  ;; sanity check branch number
+  (if (or (< branch 0) (> branch (1- (undo-tree-num-branches))))
+      (error "Invalid branch number")
+    ;; switch branch
+    (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
+	  branch)))
