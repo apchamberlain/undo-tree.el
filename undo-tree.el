@@ -360,13 +360,17 @@ using `undo-tree-redo'."
   ;; prepare *undo-tree* buffer, then draw tree in it
   (let ((undo-tree buffer-undo-tree))
     (switch-to-buffer-other-window " *undo-tree*")
+    (setq cursor-type nil)
     (erase-buffer)
     (undo-tree-move-down 1)  ; top margin
     (undo-tree-compute-widths undo-tree)
     (undo-tree-move-forward
      (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
 	2))  ; left margin
-    (undo-tree-draw-subtree (undo-tree-root undo-tree))))
+    (undo-tree-draw-subtree (undo-tree-root undo-tree))
+    (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
+    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
+    ))
 
 
 
@@ -377,6 +381,7 @@ using `undo-tree-redo'."
     ;; draw node itself
     (undo-tree-insert ?o)
     (backward-char 1)
+    (move-marker (setf (undo-tree-node-marker node) (make-marker)) (point))
 
     (cond
      ;; if we're at a leaf node, we're done
