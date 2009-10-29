@@ -6,7 +6,7 @@
 ;;;              Global variables and customization options
 
 (defvar buffer-undo-tree nil
-  "Undo history tree in current buffer.")
+  "Tree of undo entries in current buffer.")
 (make-variable-buffer-local 'buffer-undo-tree)
 
 
@@ -15,10 +15,13 @@
   :group 'undo)
 
 
-(defcustom undo-tree-visualize-spacing 3
-  "Spacing between branches in undo-tree visualization."
-  :group 'undo
-  :type 'integer)
+(defcustom undo-tree-visualizer-spacing 3
+  "Horizontal spacing in undo-tree visualization.
+Must be an odd integer."
+  :group 'undo-tree
+  :type '(integer
+ 	  :match (lambda (w n) (and (integerp n) (= (mod n 2) 1)))))
+
 
 
 
@@ -29,9 +32,10 @@
   (undo-tree
    :named
    (:constructor nil)
-   (:constructor make-undo-tree (&aux
-				 (root (make-undo-tree-node nil nil))
-				 (current root)))
+   (:constructor make-undo-tree
+		 (&aux
+		  (root (make-undo-tree-node nil nil))
+		  (current root)))
    (:copier nil))
   root current)
 
@@ -52,8 +56,75 @@
 		  (timestamp (current-time))
 		  (branch 0)))
    (:copier nil))
-  previous next undo redo timestamp branch lwidth cwidth rwidth)
+  previous next undo redo timestamp branch visualizer)
 
+
+(defstruct
+  (undo-tree-visualizer-data
+   (:type vector)   ; create unnamed struct
+   (:constructor nil)
+   (:constructor make-undo-tree-visualizer-data)
+   (:copier nil))
+  lwidth cwidth rwidth marker)
+
+
+(defmacro undo-tree-visualizer-data-p (v)
+  (let ((len (length (make-undo-tree-visualizer-data))))
+    `(and (vectorp ,v) (= (length ,v) ,len))))
+
+(defmacro undo-tree-node-lwidth (node)
+  `(when (vectorp (undo-tree-node-visualizer ,node))
+     (undo-tree-visualizer-data-lwidth
+      (undo-tree-node-visualizer ,node))))
+
+(defmacro undo-tree-node-cwidth (node)
+  `(when (vectorp (undo-tree-node-visualizer ,node))
+     (undo-tree-visualizer-data-cwidth
+      (undo-tree-node-visualizer ,node))))
+
+(defmacro undo-tree-node-rwidth (node)
+  `(when (vectorp (undo-tree-node-visualizer ,node))
+     (undo-tree-visualizer-data-rwidth
+      (undo-tree-node-visualizer ,node))))
+
+(defmacro undo-tree-node-marker (node)
+  `(when (vectorp (undo-tree-node-visualizer ,node))
+     (undo-tree-visualizer-data-marker
+      (undo-tree-node-visualizer ,node))))
+
+
+(defsetf undo-tree-node-lwidth (node) (val)
+  `(let ((v (undo-tree-node-visualizer ,node)))
+     (unless (undo-tree-visualizer-data-p v)
+       (setf (undo-tree-node-visualizer ,node)
+	     (setq v (make-undo-tree-visualizer-data))))
+     (setf (undo-tree-visualizer-data-lwidth v) ,val)))
+
+(defsetf undo-tree-node-cwidth (node) (val)
+  `(let ((v (undo-tree-node-visualizer ,node)))
+     (unless (undo-tree-visualizer-data-p v)
+       (setf (undo-tree-node-visualizer ,node)
+	     (setq v (make-undo-tree-visualizer-data))))
+     (setf (undo-tree-visualizer-data-cwidth v) ,val)))
+
+(defsetf undo-tree-node-rwidth (node) (val)
+  `(let ((v (undo-tree-node-visualizer ,node)))
+     (unless (undo-tree-visualizer-data-p v)
+       (setf (undo-tree-node-visualizer ,node)
+	     (setq v (make-undo-tree-visualizer-data))))
+     (setf (undo-tree-visualizer-data-rwidth v) ,val)))
+
+(defsetf undo-tree-node-marker (node) (val)
+  `(let ((v (undo-tree-node-visualizer ,node)))
+     (unless (undo-tree-visualizer-data-p v)
+       (setf (undo-tree-node-visualizer ,node)
+	     (setq v (make-undo-tree-visualizer-data))))
+     (setf (undo-tree-visualizer-data-marker v) ,val)))
+
+
+
+;;; =====================================================================
+;;;              Basic undo-tree data structure functions
 
 (defun undo-tree-grow (undo)
   "Add an UNDO node to current branch of `buffer-undo-tree'."
@@ -135,6 +206,19 @@ part of `buffer-undo-tree'."
 
     ;; return left-, centre- and right-widths
     (vector lwidth cwidth rwidth)))
+
+
+
+(defun undo-tree-clear-visualizer (undo-tree)
+  ;; Clear visualizer data from UNDO-TREE.
+  (undo-tree-node-clear-visualizer (undo-tree-root undo-tree)))
+
+
+(defun undo-tree-node-clear-visualizer (node)
+  ;; Recursively clear visualizer data from NODE and descendents.
+  (setf (undo-tree-node-visualizer node) nil)
+  (dolist (n (undo-tree-node-next node))
+    (undo-tree-node-clear-visualizer n)))
 
 
 
@@ -340,7 +424,7 @@ using `undo-tree-redo'."
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car p))
 	    (undo-tree-node-char-lwidth (cadr p))
-	    undo-tree-visualize-spacing 1))
+	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
       ;; middle subtree (only when number of children is odd)
       (when (= (mod num-children 2) 1)
@@ -354,7 +438,7 @@ using `undo-tree-redo'."
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car p))
 	    (if (cadr p) (undo-tree-node-char-lwidth (cadr p)) 0)
-	    undo-tree-visualize-spacing 1))
+	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
       ;; right subtrees
       (dotimes (i (/ num-children 2))
@@ -368,11 +452,11 @@ using `undo-tree-redo'."
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car p))
 	    (if (cadr p) (undo-tree-node-char-lwidth (cadr p)) 0)
-	    undo-tree-visualize-spacing 1))
+	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
       ;; horizontal part of right branch
       (unless (= num-children 2)
-	(backward-char undo-tree-visualize-spacing)
+	(backward-char undo-tree-visualizer-spacing)
 	(setq l (undo-tree-node-char-rwidth node))
 	(backward-char l)
 	(undo-tree-insert ?_ (- l (undo-tree-node-char-rwidth (car p)) 2))))
@@ -383,17 +467,17 @@ using `undo-tree-redo'."
 (defun undo-tree-node-char-lwidth (node)
   ;; Return left-width of NODE measured in characters.
   (if (= (length (undo-tree-node-next node)) 0) 0
-    (- (* (+ undo-tree-visualize-spacing 1) (undo-tree-node-lwidth node))
+    (- (* (+ undo-tree-visualizer-spacing 1) (undo-tree-node-lwidth node))
        (if (= (undo-tree-node-cwidth node) 0)
-	   (1+ (/ undo-tree-visualize-spacing 2)) 0))))
+	   (1+ (/ undo-tree-visualizer-spacing 2)) 0))))
 
 
 (defun undo-tree-node-char-rwidth (node)
   ;; Return right-width of NODE measured in characters.
   (if (= (length (undo-tree-node-next node)) 0) 0
-    (- (* (+ undo-tree-visualize-spacing 1) (undo-tree-node-rwidth node))
+    (- (* (+ undo-tree-visualizer-spacing 1) (undo-tree-node-rwidth node))
        (if (= (undo-tree-node-cwidth node) 0)
-	   (1+ (/ undo-tree-visualize-spacing 2)) 0))))
+	   (1+ (/ undo-tree-visualizer-spacing 2)) 0))))
 
 
 (defun undo-tree-insert (char &optional arg)
@@ -409,7 +493,7 @@ using `undo-tree-redo'."
   (let ((col (current-column))
 	(next-line-add-newlines t))
     (unless arg (setq arg 1))
-    (next-line arg)
+    (with-no-warnings (next-line arg))
     (unless (= (current-column) col)
       (insert (make-string (- col (current-column)) ? )))))
 
