@@ -23,6 +23,11 @@ Must be an odd integer."
  	  :match (lambda (w n) (and (integerp n) (= (mod n 2) 1)))))
 
 
+(defvar undo-tree-map nil
+  "Keymap used in undo-tree-mode.")
+
+
+
 (defface undo-tree-visualizer-default-face
   '((((class color)) :foreground "gray"))
   "*Face used to draw undo-tree in visualizer.")
@@ -52,6 +57,19 @@ in visualizer.")
 
 ;;; =================================================================
 ;;;                     Setup default keymaps
+
+(unless undo-tree-map
+  (setq undo-tree-map (make-sparse-keymap))
+  ;; remap `undo' to `undo-tree-undo'
+  (define-key undo-tree-map [remap undo] 'undo-tree-undo)
+  ;; redo doesn't exist normally, so define out own keybindings
+  (define-key undo-tree-map (kbd "C-?") 'undo-tree-redo)
+  (define-key undo-tree-map (kbd "C-+") 'undo-tree-redo)
+  ;; just in case something has defined it...
+  (define-key undo-tree-map [remap redo] 'undo-tree-redo)
+  ;; we use "C-x u" for the undo-tree visualizer
+  (define-key undo-tree-map (kbd "C-x u") 'undo-tree-visualize))
+
 
 (unless undo-tree-visualizer-map
   (setq undo-tree-visualizer-map (make-keymap))
@@ -327,7 +345,22 @@ part of `buffer-undo-tree'."
 
 
 ;;; =====================================================================
-;;;                        Undo/redo commands
+;;;                        Undo-tree commands
+
+(define-minor-mode undo-tree-mode
+  "Toggle undo-tree mode.
+With no argument, this command toggles the mode.
+A positive prefix argument turns the mode on.
+A negative prefix argument turns it off.
+
+Undo-tree-mode replaces Emacs' standard undo feature with a more
+powerful yet easier to use version, that treats the undo history
+as what it is: a tree."
+  nil             ; init value
+  " undo-tree"    ; lighter
+  undo-tree-map)  ; keymap
+
+
 
 (defun undo-tree-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
