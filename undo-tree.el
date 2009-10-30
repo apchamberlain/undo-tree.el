@@ -101,9 +101,9 @@ in visualizer.")
     'undo-tree-visualize-switch-previous-branch)
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
-    'kill-buffer-and-window)
+    'undo-tree-visualizer-quit)
   (define-key undo-tree-visualizer-map "\C-q"
-    'kill-buffer-and-window))
+    'undo-tree-visualizer-quit))
 
 
 
@@ -292,16 +292,16 @@ part of `buffer-undo-tree'."
 
 
 
-(defun undo-tree-clear-visualizer (undo-tree)
+(defun undo-tree-clear-visualizer-data (undo-tree)
   ;; Clear visualizer data from UNDO-TREE.
-  (undo-tree-node-clear-visualizer (undo-tree-root undo-tree)))
+  (undo-tree-node-clear-visualizer-data (undo-tree-root undo-tree)))
 
 
-(defun undo-tree-node-clear-visualizer (node)
+(defun undo-tree-node-clear-visualizer-data (node)
   ;; Recursively clear visualizer data from NODE and descendents.
   (setf (undo-tree-node-visualizer node) nil)
   (dolist (n (undo-tree-node-next node))
-    (undo-tree-node-clear-visualizer n)))
+    (undo-tree-node-clear-visualizer-data n)))
 
 
 
@@ -357,8 +357,17 @@ Undo-tree-mode replaces Emacs' standard undo feature with a more
 powerful yet easier to use version, that treats the undo history
 as what it is: a tree."
   nil             ; init value
-  " undo-tree"    ; lighter
+  ""              ; lighter
   undo-tree-map)  ; keymap
+
+
+(defun turn-on-undo-tree-mode ()
+  "Enable undo-tree-mode."
+  (undo-tree-mode 1))
+
+
+(define-globalized-minor-mode global-undo-tree-mode
+  undo-tree-mode turn-on-undo-tree-mode)
 
 
 
@@ -714,3 +723,10 @@ This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive "p")
   (undo-tree-visualize-switch-next-branch (- arg)))
+
+
+(defun undo-tree-visualizer-quit ()
+  "Quit the undo-tree visualizer."
+  (interactive)
+  (undo-tree-clear-visualizer-data buffer-undo-tree)
+  (kill-buffer-and-window))
