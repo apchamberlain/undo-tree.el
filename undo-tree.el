@@ -23,6 +23,23 @@ Must be an odd integer."
  	  :match (lambda (w n) (and (integerp n) (= (mod n 2) 1)))))
 
 
+(defface undo-tree-visualizer-default-face
+  '((((class color)) :foreground "gray"))
+  "*Face used to draw undo-tree in visualizer.")
+
+
+(defface undo-tree-visualizer-current-face
+  '((((class color)) :foreground "red"))
+  "*Face used to highlight current undo-tree node
+in visualizer.")
+
+
+(defface undo-tree-visualizer-active-branch-face
+  '((((class color)) :foreground "white" :weight bold))
+  "*Face used to highlight active undo-tree branch
+in visualizer.")
+
+
 (defvar undo-tree-visualizer-buffer nil
   "Parent buffer in visualizer.")
 (make-variable-buffer-local 'undo-tree-visualizer-buffer)
@@ -37,7 +54,7 @@ Must be an odd integer."
 ;;;                     Setup default keymaps
 
 (unless undo-tree-visualizer-map
-  (setq undo-tree-visualizer-map (make-sparse-keymap))
+  (setq undo-tree-visualizer-map (make-keymap))
   ;; vertical motion keys undo/redo
   (define-key undo-tree-visualizer-map [up]
     'undo-tree-visualize-undo)
@@ -61,9 +78,14 @@ Must be an odd integer."
   (define-key undo-tree-visualizer-map [left]
     'undo-tree-visualize-switch-previous-branch)
   (define-key undo-tree-visualizer-map "b"
-    'undo-tree-visualize-switch-previous-bracnh)
+    'undo-tree-visualize-switch-previous-branch)
   (define-key undo-tree-visualizer-map "\C-b"
-    'undo-tree-visualize-switch-previous-branch))
+    'undo-tree-visualize-switch-previous-branch)
+  ;; quit visualizer
+  (define-key undo-tree-visualizer-map "q"
+    'kill-buffer-and-window)
+  (define-key undo-tree-visualizer-map "\C-q"
+    'kill-buffer-and-window))
 
 
 
@@ -413,17 +435,24 @@ using `undo-tree-redo'."
     (undo-tree-move-forward
      (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
 	2))  ; left margin
-    (undo-tree-draw-subtree (undo-tree-root undo-tree))
+    ;; draw undo-tree
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+      (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
+    ;; highlight active branch
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+      (undo-tree-draw-subtree (undo-tree-root undo-tree) 'active))
+    ;; highlight current node
     (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
-    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
-    ))
+    (put-text-property (point) (1+ (point))
+		       'face 'undo-tree-visualizer-current-face)))
 
 
 
-(defun undo-tree-draw-subtree (node)
-  ;; Draw subtree rooted at node. The subtree will start from the point.
+(defun undo-tree-draw-subtree (node &optional active-branch)
+  ;; Draw subtree rooted at NODE. The subtree will start from point.
+  ;; If ACTIVE-BRANCH is positive, just draw active branch below NODE.
   (let ((num-children (length (undo-tree-node-next node)))
-	pos l p)
+	pos trunk-pos n)
     ;; draw node itself
     (undo-tree-insert ?o)
     (backward-char 1)
@@ -451,67 +480,76 @@ using `undo-tree-redo'."
       (undo-tree-move-down 1)
       (undo-tree-insert ?|)
       (backward-char 1)
-      ;; horizontal part of left branch
-      (setq l (- (undo-tree-node-char-lwidth node)
-		 (undo-tree-node-char-lwidth
-		  (car (undo-tree-node-next node)))))
-      (backward-char l)
-      (setq pos (point))
-      (unless (= num-children 2)
-	(undo-tree-move-forward 2)
-	(undo-tree-insert ?_ (- l 2)))
+      (setq trunk-pos (point))
       ;; left subtrees
-      (goto-char pos)
-      (setq p (cons nil (undo-tree-node-next node)))
+      (backward-char
+       (- (undo-tree-node-char-lwidth node)
+	  (undo-tree-node-char-lwidth
+	   (car (undo-tree-node-next node)))))
+      (setq pos (point))
+      (setq n (cons nil (undo-tree-node-next node)))
       (dotimes (i (/ num-children 2))
-	(setq p (cdr p))
-	(undo-tree-move-forward 1)
-	(undo-tree-move-down 1)
-	(undo-tree-insert ?/)
-	(backward-char 2)
-	(undo-tree-move-down 1)
-	(undo-tree-draw-subtree (car p))
+	(setq n (cdr n))
+	(when (or (null active-branch)
+		  (eq (car n)
+		      (nth (undo-tree-node-branch node)
+			   (undo-tree-node-next node))))
+	  (undo-tree-move-forward 2)
+	  (undo-tree-insert ?_ (- trunk-pos pos 2))
+	  (goto-char pos)
+	  (undo-tree-move-forward 1)
+	  (undo-tree-move-down 1)
+	  (undo-tree-insert ?/)
+	  (backward-char 2)
+	  (undo-tree-move-down 1)
+	  (undo-tree-draw-subtree (car n) active-branch))
 	(goto-char pos)
 	(undo-tree-move-forward
-	 (+ (undo-tree-node-char-rwidth (car p))
-	    (undo-tree-node-char-lwidth (cadr p))
+	 (+ (undo-tree-node-char-rwidth (car n))
+	    (undo-tree-node-char-lwidth (cadr n))
 	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
       ;; middle subtree (only when number of children is odd)
       (when (= (mod num-children 2) 1)
-	(setq p (cdr p))
-	(undo-tree-move-down 1)
-	(undo-tree-insert ?|)
-	(backward-char 1)
-	(undo-tree-move-down 1)
-	(undo-tree-draw-subtree (car p))
+	(setq n (cdr n))
+	(when (or (null active-branch)
+		  (eq (car n)
+		      (nth (undo-tree-node-branch node)
+			   (undo-tree-node-next node))))
+	  (undo-tree-move-down 1)
+	  (undo-tree-insert ?|)
+	  (backward-char 1)
+	  (undo-tree-move-down 1)
+	  (undo-tree-draw-subtree (car n) active-branch))
 	(goto-char pos)
 	(undo-tree-move-forward
-	 (+ (undo-tree-node-char-rwidth (car p))
-	    (if (cadr p) (undo-tree-node-char-lwidth (cadr p)) 0)
+	 (+ (undo-tree-node-char-rwidth (car n))
+	    (if (cadr n) (undo-tree-node-char-lwidth (cadr n)) 0)
 	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
       ;; right subtrees
+      (incf trunk-pos)
       (dotimes (i (/ num-children 2))
-	(setq p (cdr p))
-	(backward-char 1)
-	(undo-tree-move-down 1)
-	(undo-tree-insert ?\\)
-	(undo-tree-move-down 1)
-	(undo-tree-draw-subtree (car p))
+	(setq n (cdr n))
+	(when (or (null active-branch)
+		  (eq (car n)
+		      (nth (undo-tree-node-branch node)
+			   (undo-tree-node-next node))))
+	  (goto-char trunk-pos)
+	  (undo-tree-insert ?_ (- pos trunk-pos 1))
+	  (goto-char pos)
+	  (backward-char 1)
+	  (undo-tree-move-down 1)
+	  (undo-tree-insert ?\\)
+	  (undo-tree-move-down 1)
+	  (undo-tree-draw-subtree (car n) active-branch))
 	(goto-char pos)
 	(undo-tree-move-forward
-	 (+ (undo-tree-node-char-rwidth (car p))
-	    (if (cadr p) (undo-tree-node-char-lwidth (cadr p)) 0)
+	 (+ (undo-tree-node-char-rwidth (car n))
+	    (if (cadr n) (undo-tree-node-char-lwidth (cadr n)) 0)
 	    undo-tree-visualizer-spacing 1))
 	(setq pos (point)))
-      ;; horizontal part of right branch
-      (unless (= num-children 2)
-	(backward-char undo-tree-visualizer-spacing)
-	(setq l (undo-tree-node-char-rwidth node))
-	(backward-char l)
-	(undo-tree-insert ?_ (- l (undo-tree-node-char-rwidth (car p)) 2))))
-     )))
+      ))))
 
 
 
@@ -536,17 +574,24 @@ using `undo-tree-redo'."
   (unless arg (setq arg 1))
   (insert (make-string arg char))
   (undo-tree-move-forward arg)
-  (backward-delete-char arg))
+  (backward-delete-char arg)
+  (when (boundp 'undo-tree-insert-face)
+    (put-text-property (- (point) arg) (point)
+		       'face undo-tree-insert-face)))
 
 
 (defun undo-tree-move-down (&optional arg)
   ;; Move down, extending buffer if necessary.
-  (let ((col (current-column))
-	(next-line-add-newlines t))
+  (let ((row (line-number-at-pos))
+	(col (current-column))
+	line)
     (unless arg (setq arg 1))
-    (with-no-warnings (next-line arg))
-    (unless (= (current-column) col)
-      (insert (make-string (- col (current-column)) ? )))))
+    (forward-line arg)
+    (setq line (line-number-at-pos))
+    ;; if buffer doesn't have enough lines, add some
+    (when (/= line (+ row arg))
+      (insert (make-string (- arg (- line row)) ?\n)))
+    (undo-tree-move-forward col)))
 
 
 (defun undo-tree-move-forward (&optional arg)
@@ -567,6 +612,7 @@ using `undo-tree-redo'."
   "Major mode used in undo-tree visualizer."
   (kill-all-local-variables)
   (setq major-mode 'undo-tree-visualizer-mode)
+  (setq mode-name "undo-tree-visualizer-mode")
   (use-local-map undo-tree-visualizer-map))
 
 
@@ -575,13 +621,13 @@ using `undo-tree-redo'."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (put-text-property (point) (1+ (point)) 'face 'default)
-  (set-buffer undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-undo arg)
-    (set-buffer " *undo-tree*")
+    (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
-    ))
+    (put-text-property (point) (1+ (point))
+		       'face 'undo-tree-visualizer-current-face)))
 
 
 (defun undo-tree-visualize-redo (&optional arg)
@@ -589,13 +635,13 @@ using `undo-tree-redo'."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (put-text-property (point) (1+ (point)) 'face 'default)
-  (set-buffer undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-redo arg)
-    (set-buffer " *undo-tree*")
+    (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
-    ))
+    (put-text-property (point) (1+ (point))
+		       'face 'undo-tree-visualizer-current-face)))
 
 
 (defun undo-tree-visualize-switch-next-branch (arg)
@@ -603,12 +649,28 @@ using `undo-tree-redo'."
 This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive "p")
-  (set-buffer undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window " *undo-tree*")
+  ;; un-highlight old active branch below current node
+  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+    (save-excursion
+      (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
+  ;; increment branch
   (let ((branch (undo-tree-node-branch (undo-tree-current buffer-undo-tree))))
   (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
-	(if (>= (+ branch arg) (undo-tree-num-branches))
-	    (1- (undo-tree-num-branches)) (+ branch arg)))
-  (set-buffer " *undo-tree*")))
+	(cond
+	 ((>= (+ branch arg) (undo-tree-num-branches))
+	  (1- (undo-tree-num-branches)))
+	 ((<= (+ branch arg) 0) 0)
+	 (t (+ branch arg))))
+  ;; highlight new active branch below current node
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+    (save-excursion
+      (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
+  ;; re-highlight current node
+  (put-text-property (point) (1+ (point))
+		     'face 'undo-tree-visualizer-current-face)))
 
 
 (defun undo-tree-visualize-switch-previous-branch (arg)
