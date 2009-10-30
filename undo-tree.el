@@ -489,7 +489,9 @@ using `undo-tree-redo'."
     ;; draw node itself
     (undo-tree-insert ?o)
     (backward-char 1)
-    (move-marker (setf (undo-tree-node-marker node) (make-marker)) (point))
+    (unless (markerp (undo-tree-node-marker node))
+      (setf (undo-tree-node-marker node) (make-marker)))
+    (move-marker (undo-tree-node-marker node) (point))
 
     (cond
      ;; if we're at a leaf node, we're done
@@ -506,7 +508,7 @@ using `undo-tree-redo'."
       (undo-tree-insert ?|)
       (backward-char 1)
       (undo-tree-move-down 1)
-      (undo-tree-draw-subtree (car (undo-tree-node-next node))))
+      (undo-tree-draw-subtree (car (undo-tree-node-next node)) active-branch))
 
      ;; if node had multiple children, draw branches
      (t
