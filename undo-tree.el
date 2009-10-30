@@ -23,6 +23,49 @@ Must be an odd integer."
  	  :match (lambda (w n) (and (integerp n) (= (mod n 2) 1)))))
 
 
+(defvar undo-tree-visualizer-buffer nil
+  "Parent buffer in visualizer.")
+(make-variable-buffer-local 'undo-tree-visualizer-buffer)
+
+
+(defvar undo-tree-visualizer-map nil
+  "Keymap used in undo-tree visualizer.")
+
+
+
+;;; =================================================================
+;;;                     Setup default keymaps
+
+(unless undo-tree-visualizer-map
+  (setq undo-tree-visualizer-map (make-sparse-keymap))
+  ;; vertical motion keys undo/redo
+  (define-key undo-tree-visualizer-map [up]
+    'undo-tree-visualize-undo)
+  (define-key undo-tree-visualizer-map "p"
+    'undo-tree-visualize-undo)
+  (define-key undo-tree-visualizer-map "\C-p"
+    'undo-tree-visualize-undo)
+  (define-key undo-tree-visualizer-map [down]
+    'undo-tree-visualize-redo)
+  (define-key undo-tree-visualizer-map "n"
+    'undo-tree-visualize-redo)
+  (define-key undo-tree-visualizer-map "\C-n"
+    'undo-tree-visualize-redo)
+  ;; horizontal motion keys switch branch
+  (define-key undo-tree-visualizer-map [right]
+    'undo-tree-visualize-switch-next-branch)
+  (define-key undo-tree-visualizer-map "f"
+    'undo-tree-visualize-switch-next-branch)
+  (define-key undo-tree-visualizer-map "\C-f"
+    'undo-tree-visualize-undo)
+  (define-key undo-tree-visualizer-map [left]
+    'undo-tree-visualize-switch-previous-branch)
+  (define-key undo-tree-visualizer-map "b"
+    'undo-tree-visualize-switch-previous-bracnh)
+  (define-key undo-tree-visualizer-map "\C-b"
+    'undo-tree-visualize-switch-previous-branch))
+
+
 
 
 ;;; =====================================================================
@@ -222,10 +265,6 @@ part of `buffer-undo-tree'."
 
 
 
-
-;;; =====================================================================
-;;;                        Undo/redo commands
-
 (defmacro undo-tree-num-branches ()
   ;; Return number of branches at current undo tree node.
   '(length (undo-tree-node-next (undo-tree-current buffer-undo-tree))))
@@ -264,6 +303,10 @@ part of `buffer-undo-tree'."
 
 
 
+
+;;; =====================================================================
+;;;                        Undo/redo commands
+
 (defun undo-tree-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
@@ -273,7 +316,7 @@ part of `buffer-undo-tree'."
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
   (undo-list-transfer-to-tree)
 
-  (dotimes (i arg)
+  (dotimes (i (or arg 1))
     ;; check if at top of undo tree
     (if (null (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
 	(error "No further undo information")
@@ -305,7 +348,7 @@ part of `buffer-undo-tree'."
   (undo-list-transfer-to-tree)
 
   (let ((current (undo-tree-current buffer-undo-tree)))
-    (dotimes (i arg)
+    (dotimes (i (or arg 1))
       ;; check if at bottom of undo tree
       (if (null (undo-tree-node-next (undo-tree-current buffer-undo-tree)))
 	  (error "No further redo information")
@@ -334,8 +377,7 @@ using `undo-tree-redo'."
   (interactive (list (or (and prefix-arg (prefix-numeric-value prefix-arg))
 			 (read-number
 			  (format "Branch (0-%d): "
-				  (1- (undo-tree-num-branches))))
-			 )))
+				  (1- (undo-tree-num-branches)))))))
   ;; sanity check branch number
   (if (or (< branch 0) (> branch (1- (undo-tree-num-branches))))
       (error "Invalid branch number")
@@ -358,8 +400,12 @@ using `undo-tree-redo'."
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
   (undo-list-transfer-to-tree)
   ;; prepare *undo-tree* buffer, then draw tree in it
-  (let ((undo-tree buffer-undo-tree))
+  (let ((undo-tree buffer-undo-tree)
+	(buff (current-buffer)))
     (switch-to-buffer-other-window " *undo-tree*")
+    (undo-tree-visualizer-mode)
+    (setq undo-tree-visualizer-buffer buff)
+    (setq buffer-undo-tree undo-tree)
     (setq cursor-type nil)
     (erase-buffer)
     (undo-tree-move-down 1)  ; top margin
@@ -511,3 +557,63 @@ using `undo-tree-redo'."
 	(forward-char arg)
       (end-of-line)
       (insert (make-string (- arg n) ? )))))
+
+
+
+;;; =====================================================================
+;;;                    Visualizer mode commands
+
+(defun undo-tree-visualizer-mode ()
+  "Major mode used in undo-tree visualizer."
+  (kill-all-local-variables)
+  (setq major-mode 'undo-tree-visualizer-mode)
+  (use-local-map undo-tree-visualizer-map))
+
+
+(defun undo-tree-visualize-undo (&optional arg)
+  "Undo changes. A numeric ARG serves as a repeat count."
+  (interactive "p")
+  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+  (put-text-property (point) (1+ (point)) 'face 'default)
+  (set-buffer undo-tree-visualizer-buffer)
+  (unwind-protect
+      (undo-tree-undo arg)
+    (set-buffer " *undo-tree*")
+    (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
+    ))
+
+
+(defun undo-tree-visualize-redo (&optional arg)
+  "Redo changes. A numeric ARG serves as a repeat count."
+  (interactive "p")
+  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+  (put-text-property (point) (1+ (point)) 'face 'default)
+  (set-buffer undo-tree-visualizer-buffer)
+  (unwind-protect
+      (undo-tree-redo arg)
+    (set-buffer " *undo-tree*")
+    (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+    (put-text-property (point) (1+ (point)) 'face '(foreground-color . "red"))
+    ))
+
+
+(defun undo-tree-visualize-switch-next-branch (arg)
+  "Switch to next branch of the undo tree.
+This will affect which branch to descend when *redoing* changes
+using `undo-tree-redo' or `undo-tree-visualizer-redo'."
+  (interactive "p")
+  (set-buffer undo-tree-visualizer-buffer)
+  (let ((branch (undo-tree-node-branch (undo-tree-current buffer-undo-tree))))
+  (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
+	(if (>= (+ branch arg) (undo-tree-num-branches))
+	    (1- (undo-tree-num-branches)) (+ branch arg)))
+  (set-buffer " *undo-tree*")))
+
+
+(defun undo-tree-visualize-switch-previous-branch (arg)
+  "Switch to previous branch of the undo tree.
+This will affect which branch to descend when *redoing* changes
+using `undo-tree-redo' or `undo-tree-visualizer-redo'."
+  (interactive "p")
+  (undo-tree-visualize-switch-next-branch (- arg)))
