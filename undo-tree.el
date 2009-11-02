@@ -475,8 +475,9 @@ using `undo-tree-redo'."
     (undo-tree-move-down 1)  ; top margin
     (undo-tree-compute-widths undo-tree)
     (undo-tree-move-forward
-     (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
-	2))  ; left margin
+     (max (/ (window-width) 2)
+	  (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
+	     2)))  ; left margin
     ;; draw undo-tree
     (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
       (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
