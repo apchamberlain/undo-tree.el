@@ -99,6 +99,9 @@ in visualizer.")
     'undo-tree-visualize-switch-previous-branch)
   (define-key undo-tree-visualizer-map "\C-b"
     'undo-tree-visualize-switch-previous-branch)
+  ;; mouse sets buffer state to node at click
+  (define-key undo-tree-visualizer-map [mouse-1]
+    'undo-tree-visualizer-set)
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
@@ -305,6 +308,19 @@ part of `buffer-undo-tree'."
 
 
 
+(defun undo-tree-position (node list)
+  "Find the first occurrence of NODE in LIST.
+Return the index of the matching item, or nil of not found.
+Comparison is done with 'eq."
+  (let ((i 0))
+    (catch 'found
+      (while (progn
+	       (when (eq node (car list)) (throw 'found i))
+	       (incf i)
+	       (setq list (cdr list))))
+      nil)))
+
+
 (defmacro undo-tree-num-branches ()
   ;; Return number of branches at current undo tree node.
   '(length (undo-tree-node-next (undo-tree-current buffer-undo-tree))))
@@ -450,10 +466,39 @@ using `undo-tree-redo'."
 	  branch)))
 
 
+(defun undo-tree-set (node)
+  ;; Set buffer to state corresponding to NODE. Returns intersection point
+  ;; between path back from current node and path back from selected NODE.
+  (let ((path (make-hash-table :test 'eq))
+	(n node))
+    (puthash (undo-tree-root buffer-undo-tree) t path)
+    ;; build list of nodes leading back from selected node to root, updating
+    ;; branches as we go to point down to selected node
+    (while (progn
+	     (puthash n t path)
+	     (when (undo-tree-node-previous n)
+	       (setf (undo-tree-node-branch (undo-tree-node-previous n))
+		     (undo-tree-position
+		      n (undo-tree-node-next (undo-tree-node-previous n))))
+	       (setq n (undo-tree-node-previous n)))))
+    ;; work backwards from current node until we intersect path back from
+    ;; selected node
+    (setq n (undo-tree-current buffer-undo-tree))
+    (while (not (gethash n path))
+      (setq n (undo-tree-node-previous n)))
+    ;; ascend tree until intersection node
+    (while (not (eq (undo-tree-current buffer-undo-tree) n))
+      (undo-tree-undo))
+    ;; descend tree until selected node
+    (while (not (eq (undo-tree-current buffer-undo-tree) node))
+      (undo-tree-redo))
+    n))  ; return intersection node
+
+
 
 
 ;;; =====================================================================
-;;;                     Undo-tree Visualization
+;;;                       Undo-tree visualizer
 
 (defun undo-tree-visualize ()
   "Visualize the current buffer's undo tree."
@@ -471,24 +516,28 @@ using `undo-tree-redo'."
     (setq undo-tree-visualizer-buffer buff)
     (setq buffer-undo-tree undo-tree)
     (setq cursor-type nil)
-    (erase-buffer)
-    (undo-tree-move-down 1)  ; top margin
-    (undo-tree-compute-widths undo-tree)
-    (undo-tree-move-forward
-     (max (/ (window-width) 2)
-	  (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
-	     2)))  ; left margin
-    ;; draw undo-tree
-    (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
-      (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
-    ;; highlight active branch
-    (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
-      (undo-tree-draw-subtree (undo-tree-root undo-tree) 'active))
-    ;; highlight current node
-    (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
-    (put-text-property (point) (1+ (point))
-		       'face 'undo-tree-visualizer-current-face)))
+    (undo-tree-draw-tree undo-tree)))
 
+
+(defun undo-tree-draw-tree (undo-tree)
+  ;; Draw undo tree in current buffer.
+  (erase-buffer)
+  (undo-tree-move-down 1)  ; top margin
+  (undo-tree-compute-widths undo-tree)
+  (undo-tree-move-forward
+   (max (/ (window-width) 2)
+	(+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
+	   2)))  ; left margin
+  ;; draw undo-tree
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+    (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
+  ;; highlight active branch
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+    (undo-tree-draw-subtree (undo-tree-root undo-tree) 'active))
+  ;; highlight current node
+  (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
+  (put-text-property (point) (1+ (point))
+		     'face 'undo-tree-visualizer-current-face))
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
@@ -496,12 +545,14 @@ using `undo-tree-redo'."
   ;; If ACTIVE-BRANCH is positive, just draw active branch below NODE.
   (let ((num-children (length (undo-tree-node-next node)))
 	pos trunk-pos n)
-    ;; draw node itself
+
+    ;; draw node itself, and link it to node in tree
     (undo-tree-insert ?o)
     (backward-char 1)
     (unless (markerp (undo-tree-node-marker node))
       (setf (undo-tree-node-marker node) (make-marker)))
     (move-marker (undo-tree-node-marker node) (point))
+    (put-text-property (point) (1+ (point)) 'undo-tree-node node)
 
     (cond
      ;; if we're at a leaf node, we're done
@@ -731,3 +782,17 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive)
   (undo-tree-clear-visualizer-data buffer-undo-tree)
   (kill-buffer-and-window))
+
+
+(defun undo-tree-visualizer-set (pos)
+  "Set buffer to state corresponding to undo tree node
+at POS."
+  (interactive "@e")
+  (setq pos (event-start (nth 1 pos)))
+  (let ((node (get-text-property pos 'undo-tree-node)))
+    (when node
+      ;; set parent buffer to state corresponding to node at POS
+      (set-buffer undo-tree-visualizer-buffer)
+      (undo-tree-set node)
+      (set-buffer " *undo-tree*")
+      (undo-tree-draw-tree buffer-undo-tree))))
