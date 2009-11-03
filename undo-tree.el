@@ -102,6 +102,15 @@ in visualizer.")
   ;; mouse sets buffer state to node at click
   (define-key undo-tree-visualizer-map [mouse-1]
     'undo-tree-visualizer-set)
+  ;; horizontal scrolling may be needed if tree is very wide
+  (define-key undo-tree-visualizer-map ","
+    (lambda () (interactive) "Scroll right." (scroll-right 1 t)))
+  (define-key undo-tree-visualizer-map "."
+    (lambda () (interactive) "Scroll left." (scroll-left 1 t)))
+  (define-key undo-tree-visualizer-map "<"
+    (lambda () (interactive) "Scroll right." (scroll-right 1 t)))
+  (define-key undo-tree-visualizer-map ">"
+    (lambda () (interactive) "Scroll left." (scroll-left 1 t)))
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
@@ -516,7 +525,9 @@ using `undo-tree-redo'."
     (setq undo-tree-visualizer-buffer buff)
     (setq buffer-undo-tree undo-tree)
     (setq cursor-type nil)
-    (undo-tree-draw-tree undo-tree)))
+    (setq buffer-read-only nil)
+    (undo-tree-draw-tree undo-tree)
+    (setq buffer-read-only t)))
 
 
 (defun undo-tree-draw-tree (undo-tree)
@@ -709,13 +720,16 @@ using `undo-tree-redo'."
   (kill-all-local-variables)
   (setq major-mode 'undo-tree-visualizer-mode)
   (setq mode-name "undo-tree-visualizer-mode")
-  (use-local-map undo-tree-visualizer-map))
+  (use-local-map undo-tree-visualizer-map)
+  (setq truncate-lines t)
+  (setq buffer-read-only t))
 
 
 (defun undo-tree-visualize-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+  (setq buffer-read-only nil)
   (put-text-property (point) (1+ (point)) 'face 'default)
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
@@ -723,13 +737,15 @@ using `undo-tree-redo'."
     (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (put-text-property (point) (1+ (point))
-		       'face 'undo-tree-visualizer-current-face)))
+		       'face 'undo-tree-visualizer-current-face)
+    (setq buffer-read-only t)))
 
 
 (defun undo-tree-visualize-redo (&optional arg)
   "Redo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+  (setq buffer-read-only nil)
   (put-text-property (point) (1+ (point)) 'face 'default)
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
@@ -737,7 +753,8 @@ using `undo-tree-redo'."
     (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (put-text-property (point) (1+ (point))
-		       'face 'undo-tree-visualizer-current-face)))
+		       'face 'undo-tree-visualizer-current-face)
+    (setq buffer-read-only t)))
 
 
 (defun undo-tree-visualize-switch-next-branch (arg)
@@ -748,6 +765,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (switch-to-buffer-other-window " *undo-tree*")
   ;; un-highlight old active branch below current node
+  (setq buffer-read-only nil)
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
     (save-excursion
@@ -766,7 +784,8 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
       (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
   ;; re-highlight current node
   (put-text-property (point) (1+ (point))
-		     'face 'undo-tree-visualizer-current-face)))
+		     'face 'undo-tree-visualizer-current-face)
+  (setq buffer-read-only t)))
 
 
 (defun undo-tree-visualize-switch-previous-branch (arg)
@@ -795,4 +814,6 @@ at POS."
       (set-buffer undo-tree-visualizer-buffer)
       (undo-tree-set node)
       (set-buffer " *undo-tree*")
-      (undo-tree-draw-tree buffer-undo-tree))))
+      (setq buffer-read-only nil)
+      (undo-tree-draw-tree buffer-undo-tree)
+      (setq buffer-read-only t))))
