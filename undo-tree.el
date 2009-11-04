@@ -989,14 +989,19 @@ using `undo-tree-redo'."
 	   2)))  ; left margin
   ;; draw undo-tree
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
-	(stack (list (cons (move-marker (make-marker) (point))
-			   (undo-tree-root undo-tree))))
-	n)
+	(stack (list (undo-tree-root undo-tree)))
+	(n (undo-tree-root undo-tree)))
+    ;; link root node to its representation in visualizer
+    (unless (markerp (undo-tree-node-marker n))
+      (setf (undo-tree-node-marker n) (make-marker))
+      (set-marker-insertion-type (undo-tree-node-marker n) nil))
+    (move-marker (undo-tree-node-marker n) (point))
+    ;; draw nodes from stack until stack is empty
     (save-excursion
       (while stack
 	(setq n (pop stack))
-	(goto-char (car n))
-	(setq n (undo-tree-draw-subtree (cdr n)))
+	(goto-char (undo-tree-node-marker n))
+	(setq n (undo-tree-draw-subtree n))
 	(setq stack (append stack n)))))
   ;; highlight active branch
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
@@ -1009,13 +1014,18 @@ using `undo-tree-redo'."
 
 (defun undo-tree-highlight-active-branch (node)
   ;; Draw highlighted active branch below NODE in current buffer.
-  (let ((stack (list (cons (move-marker (make-marker) (point)) node)))
-	n)
+  (let ((stack (list node)))
+    ;; link node to its representation in visualizer
+    (unless (markerp (undo-tree-node-marker node))
+      (setf (undo-tree-node-marker node) (make-marker))
+      (set-marker-insertion-type (undo-tree-node-marker node) nil))
+    (move-marker (undo-tree-node-marker node) (point))
+    ;; draw active branch
     (while stack
-      (setq n (pop stack))
-      (goto-char (car n))
-      (setq n (undo-tree-draw-subtree (cdr n) 'active))
-      (setq stack (append stack n)))))
+      (setq node (pop stack))
+      (goto-char (undo-tree-node-marker node))
+      (setq node (undo-tree-draw-subtree node 'active))
+      (setq stack (append stack node)))))
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
@@ -1024,12 +1034,9 @@ using `undo-tree-redo'."
   (let ((num-children (length (undo-tree-node-next node)))
 	node-list pos trunk-pos n)
 
-    ;; draw node itself, and link it to node in tree
+    ;; draw node itself, and link it back to node in tree
     (undo-tree-insert ?o)
     (backward-char 1)
-    (unless (markerp (undo-tree-node-marker node))
-      (setf (undo-tree-node-marker node) (make-marker)))
-    (move-marker (undo-tree-node-marker node) (point))
     (put-text-property (point) (1+ (point)) 'undo-tree-node node)
 
     (cond
@@ -1047,10 +1054,14 @@ using `undo-tree-redo'."
       (undo-tree-insert ?|)
       (backward-char 1)
       (undo-tree-move-down 1)
+      (setq n (undo-tree-node-next node))
+      ;; link next node to its representation in visualizer
+      (unless (markerp (undo-tree-node-marker n))
+	(setf (undo-tree-node-marker n) (make-marker))
+	(set-marker-insertion-type (undo-tree-node-marker n) nil))
+      (move-marker (undo-tree-node-marker n) (point))
       ;; add next node to list of nodes to draw next
-      (push (cons (move-marker (make-marker) (point))
-		  (car (undo-tree-node-next node)))
-	    node-list))
+      (push n node-list))
 
      ;; if node had multiple children, draw branches
      (t
@@ -1079,10 +1090,13 @@ using `undo-tree-redo'."
 	  (undo-tree-insert ?/)
 	  (backward-char 2)
 	  (undo-tree-move-down 1)
+	  ;; link node to its representation in visualizer
+	  (unless (markerp (undo-tree-node-marker (car n)))
+	    (setf (undo-tree-node-marker (car n)) (make-marker))
+	    (set-marker-insertion-type (undo-tree-node-marker (car n)) nil))
+	  (move-marker (undo-tree-node-marker (car n)) (point))
 	  ;; add node to list of nodes to draw next
-	  (push (cons (move-marker (make-marker) (point))
-		      (car n))
-		node-list))
+	  (push (car n) node-list))
 	(goto-char pos)
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car n))
@@ -1100,9 +1114,13 @@ using `undo-tree-redo'."
 	  (undo-tree-insert ?|)
 	  (backward-char 1)
 	  (undo-tree-move-down 1)
-	  (push (cons (move-marker (make-marker) (point))
-		      (car n))
-		node-list))
+	  ;; link node to its representation in visualizer
+	  (unless (markerp (undo-tree-node-marker (car n)))
+	    (setf (undo-tree-node-marker (car n)) (make-marker))
+	    (set-marker-insertion-type (undo-tree-node-marker (car n)) nil))
+	  (move-marker (undo-tree-node-marker (car n)) (point))
+	  ;; add node to list of nodes to draw next
+	  (push (car n) node-list))
 	(goto-char pos)
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car n))
@@ -1124,9 +1142,13 @@ using `undo-tree-redo'."
 	  (undo-tree-move-down 1)
 	  (undo-tree-insert ?\\)
 	  (undo-tree-move-down 1)
-	  (push (cons (move-marker (make-marker) (point))
-		      (car n))
-		node-list))
+	  ;; link node to its representation in visualizer
+	  (unless (markerp (undo-tree-node-marker (car n)))
+	    (setf (undo-tree-node-marker (car n)) (make-marker))
+	    (set-marker-insertion-type (undo-tree-node-marker (car n)) nil))
+	  (move-marker (undo-tree-node-marker (car n)) (point))
+	  ;; add node to list of nodes to draw next
+	  (push (car n) node-list))
 	(when (cdr n)
 	  (goto-char pos)
 	  (undo-tree-move-forward
