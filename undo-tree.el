@@ -1,5 +1,420 @@
 
+;;; undo-tree.el --- Treat undo history as a tree
 
+
+;; Copyright (C) 2009 Toby Cubitt
+
+;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
+;; Version: 0.1
+;; Keywords: undo, redo, history, tree
+;; URL: http://www.dr-qubit.org/emacs.php
+
+
+;; This file is NOT part of Emacs.
+;;
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License
+;; as published by the Free Software Foundation; either version 2
+;; of the License, or (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program; if not, write to the Free Software
+;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+;; MA 02110-1301, USA.
+
+
+;;; Commentary:
+;;
+;; Emacs has a powerful undo-system. Unlike the standard undo/redo system in
+;; most software, it allows you to recover *any* past state of a buffer
+;; (whereas the standard undo/redo system loses past states as soon as you
+;; redo). However, this power comes at a price: people can find Emacs' undo
+;; confusing and difficult to use, spawning a number of packages that replace
+;; it with the less powerful but more intuitive undo/redo system.
+;;
+;; Both the loss of data with standard undo/redo, and the confusion of Emacs'
+;; undo, stem from trying to treat undo history as a linear sequence of
+;; changes. It's not. Undo-tree-mode replaces Emacs' undo system with a system
+;; that treats undo history as what it is: a branching tree of changes. This
+;; simple idea allows the more intuitive behaviour of the standard undo/redo
+;; system to be combined with the power of never losing any history. An added
+;; side bonus is that undo history can be stored more efficiently, allowing
+;; more changes to accumulate before Emacs starts discarding history.
+;;
+;; The only downside to this more advanced yet simpler undo system is that it
+;; was inspired by Vim. But, after all, successful religions always steal the
+;; best ideas from other religions.
+;;
+;;
+;; Quick-Start
+;; ===========
+;;
+;; If you're the kind of person who likes jump in the car and drive, without
+;; bothering to first figure out whether the button on the left dips the
+;; headlights or opens sun-roof (after all, you'll soon figure it out when you
+;; push it), then here's the minimum you need to know:
+;;
+;; `undo-tree-mode' and `global-undo-tree-mode'
+;;   Enable undo-tree mode (either in the current buffer or globally).
+;;
+;; C-_  C-/  (`undo-tree-undo')
+;;   Undo changes.
+;;
+;; C-+  C-?  (`undo-tree-redo')
+;;   Redo changes.
+;;
+;; `undo-tree-switch-branch'
+;;   Switch undo-tree branch.
+;;   (What does this mean? Better press that button and see!)
+;;
+;; C-x u  (`undo-tree-visualize')
+;;   Visualize undo tree.
+;;   (Better press this button too!)
+;;
+;;
+;; In the undo visualizer:
+;;
+;; <up>  p  C-p  (`undo-tree-visualize-undo')
+;;   Undo changes.
+;;
+;; <down>  n  C-n  (`undo-tree-visualize-undo')
+;;   Undo changes.
+;;
+;; <left>  b  C-b  (`undo-tree-visualize-switch-previous-branch')
+;;   Switch to previous undo-tree branch.
+;;
+;; <right>  f  C-f  (`undo-tree-visualize-switch-next-branch')
+;;   Switch to next undo-tree branch.
+;;
+;; q  C-q
+;;   Quit undo-tree-visualizer.
+;;
+;; ,  <
+;;   Scroll left.
+;;
+;; .  >
+;;   Scroll right.
+;;
+;; <pgup>
+;;   Scroll up.
+;;
+;; <pgdown>
+;;   Scroll down.
+;;
+;;
+;;
+;; Explanation
+;; ===========
+;;
+;; To understand the different undo systems, it's easiest to consider an
+;; example. Imagine you make a few edits in a buffer. As you edit, you
+;; accumulate a history of changes, which we might visualize as a string of
+;; past buffer states, growing downwards:
+;;
+;;                                o  (initial buffer state)
+;;                                |
+;;                                |
+;;                                o  (first edit)
+;;                                |
+;;                                |
+;;                                o  (second edit)
+;;                                |
+;;                                |
+;;                                x  (current buffer state)
+;;
+;;
+;; Now imagine that you undo the last two changes. We can visualize this as
+;; rewinding the current state back two steps:
+;;
+;;                                o  (initial buffer state)
+;;                                |
+;;                                |
+;;                                x  (current buffer state)
+;;                                |
+;;                                |
+;;                                o
+;;                                |
+;;                                |
+;;                                o
+;;
+;;
+;; However, this isn't a good representation of what Emacs' undo system
+;; does. Instead, it treats the undos as *new* changes to the buffer, and adds
+;; them to the history:
+;;
+;;                                o  (initial buffer state)
+;;                                |
+;;                                |
+;;                                o  (first edit)
+;;                                |
+;;                                |
+;;                                o  (second edit)
+;;                                |
+;;                                |
+;;                                x  (buffer state before undo)
+;;                                |
+;;                                |
+;;                                o  (first undo)
+;;                                |
+;;                                |
+;;                                x  (second undo)
+;;
+;;
+;; Actually, since the buffer returns to a previous state after an undo, a
+;; better way to visualize it is to imagine the string of changes turning back
+;; on itself:
+;;
+;;        (initial buffer state)  o
+;;                                |
+;;                                |
+;;                  (first edit)  o  x  (second undo)
+;;                                |  |
+;;                                |  |
+;;                 (second edit)  o  o  (first undo)
+;;                                | /
+;;                                |/
+;;                                o  (buffer state before undo)
+;;
+;; Treating undos as new changes might seem a strange thing to do. But the
+;; advantage becomes clear as soon as we imagine what happens when you edit
+;; the buffer again. Since you've undone a couple of changes, new edits will
+;; branch off from the buffer state that you've rewound to:
+;;
+;;                                o  (initial buffer state)
+;;                                |
+;;                                |
+;;                                o
+;;                                |\
+;;                                | \
+;;                                o  x  (new edit)
+;;                                |
+;;                                |
+;;                                o
+;;
+;; The standard undo/redo system only lets you go backwards and forwards
+;; linearly. So as soon as you make that new edit, it discards the old
+;; branch. Emacs' undo just keeps adding changes to the end of the string. So
+;; the undo history in the two systems now looks like this:
+;;
+;;            Undo/Redo:                      Emacs' undo
+;;
+;;               o     	       	       	       	  o
+;;               |	       	       	       	  |
+;;               |	      	      		  |
+;;               o	      	   		  o  o
+;;               .\                               |  |\
+;;               . \                              |  | \
+;;               .  x  (new edit)                 o  o	|
+;;   (discarded  .                                | /   |
+;;     branch)   .                                |/    |
+;;               .                                o     |
+;;                                                      |
+;;                                                      |
+;;                                                      x  (new edit)
+;;
+;; Now, what if you change your mind about those undos, and decide you did
+;; like those other changes you'd made after all? With the standard undo/redo
+;; system, you're dead. There's no way to recover them, because that branch
+;; was discarded when you made the new edit.
+;;
+;; However, in Emacs' undo system, those old buffer states are still there in
+;; the undo history. You just have to rewind back through the new edit, and
+;; back through the changes made by the undos, until you reach them. Of
+;; course, since Emacs treats undos (even undos of undos!) as new changes,
+;; you're really weaving backwards and forwards through the history, adding
+;; new changes to the end of the string as you go:
+;;
+;;				  o
+;;     	       	       	       	  |
+;;                                |
+;;                                o  o	   o  (undo new edit)
+;;                                |  |\	   |\
+;;                                |  | \   | \
+;;                                o  o  |  |  o	 (undo the undo)
+;;                                | /   |  |  |
+;;                                |/    |  |  |
+;;               (trying to get   o     |  |  x	 (undo the undo)
+;;                to this state)        | /
+;;                                      |/
+;;                                      o
+;;
+;; So far, this is still reasonably intuitive to use. It doesn't behave so
+;; differently to standard undo/redo, except that by going back far enough you
+;; can access changes that would be lost in standard undo/redo.
+;;
+;; However, imagine that after undoing as just described, you decide you
+;; actually want to rewind right back to the initial state. If you're lucky,
+;; and haven't invoked any command since the last undo, you can just keep on
+;; undoing until you get back to the start:
+;;
+;;               (trying to get   o		 x  (got there!)
+;;     	       	  to this state)  |		 |
+;;                                |		 |
+;;                                o  o	   o  	 o  (keep undoing)
+;;                                |  |\	   |\	 |
+;;                                |  | \   | \	 |
+;;                                o  o  |  |  o	 o  (keep undoing)
+;;                                | /   |  |  |	/
+;;                                |/    |  |  |/
+;;               (already undid   o     |  |  o  (got this far)
+;;                to this state)        | /
+;;                                      |/
+;;                                      o
+;;
+;; But if you're unlucky, you've moved the point (say) after getting to the
+;; point labelled "got this far". In that case, you've "broken the undo
+;; chain". If you try to undo now, Emacs thinks you're trying to undo the
+;; undos. So to get back to the initial state you now have to rewind through
+;; *all* the changes, including the undos you just did:
+;;
+;;      (trying to get   o                          x  (finally got there!)
+;;       to this state)  |                          |
+;;                       |                          |
+;;                       o  o     o     o     o     o
+;;                       |  |\    |\    |\    |\    |
+;;                       |  | \   | \	| \   | \   |
+;;                       o  o  |  |  o	o  o  |  o  o
+;;                       | /   |  |  | /   |  |  | /
+;;                       |/    |  |  |/    |  |  |/
+;;      (already undid   o     |  |  o<.   |  |  o
+;;       to this state)        | /     :   | /
+;;                             |/      :   |/
+;;                             o       :   o
+;;                                     :
+;;                             (got this far, but
+;;                              broke undo chain)
+;;
+;; Confused?
+;;
+;; In practice you can just hold down the undo key until you reach the buffer
+;; state that you want. But whatever you do, don't move around in the buffer
+;; to check! Because you'll break the undo chain, and then you'll have to
+;; traverse the entire string of undos again to get back to the point at which
+;; you broke the chain. Commands such as `undo-only', and undo in region (in
+;; transient-mark-mode), help make using Emacs' undo a little easier, but
+;; nonetheless it remains confusing.
+;;
+;;
+;; So what does undo-tree mode do? Remember the diagram we drew to represent
+;; the history we've been discussing (make a few edits, undo a couple of
+;; times, and edit again)? The diagram that conceptually represented our undo
+;; history, before we started discussing specific undo systems? It looked like
+;; this:
+;;
+;;                                o  (initial buffer state)
+;;                                |
+;;                                |
+;;                                o
+;;                                |\
+;;                                | \
+;;                                o  x  (current state)
+;;                                |
+;;                                |
+;;                                o
+;;
+;; Well, that's *exactly* what the undo history looks like to undo-tree-mode.
+;; It doesn't discard the old branch (as standard undo/redo does), nor does it
+;; treat undos as new changes to be added to the end of a linear string of
+;; buffer states (as Emacs' undo does). It just keeps track of the tree of
+;; branching changes that make up the entire undo history.
+;;
+;; If you undo from this point, you'll rewind back up the tree to the previous
+;; state:
+;;
+;;                                o
+;;                                |
+;;                                |
+;;                                x  (undo)
+;;                                |\
+;;                                | \
+;;                                o  o
+;;                                |
+;;                                |
+;;                                o
+;;
+;; If you were to undo again, you'd rewind back to the initial state. If on
+;; the other hand you redo the change, you'll end up back at the bottom of the
+;; most recent branch:
+;;
+;;                                o
+;;                                |
+;;                                |
+;;                                o  (start here)
+;;                                |\
+;;                                | \
+;;                                o  x  (redo)
+;;                                |
+;;                                |
+;;                                o
+;;
+;; So far, this is just like the standard undo/redo system. But what if you
+;; want to return to a buffer state located on a previous branch of the
+;; history? Since undo-tree-mode keeps the entire history, you simply need to
+;; tell it to switch to a different branch, and then redo the changes you
+;; want:
+;;
+;;                                o
+;;                                |
+;;                                |
+;;                                o  (start here, but switch
+;;                                |\  to the other branch)
+;;                                | \
+;;                        (redo)  o  o
+;;                                |
+;;                                |
+;;                        (redo)  x
+;;
+;; Now you're on the other branch, and if you undo and redo changes you'll
+;; stay on that branch, moving up and down through the buffer states located
+;; on that branch. Until you decide to switch branches again, of course.
+;;
+;; Real undo trees might have multiple branches and sub-branches:
+;;
+;;                                o
+;;                            ____|______
+;;                           /           \
+;;                          o             o
+;;                      ____|__         __|
+;;                     /    |  \       /   \
+;;                    o     o   o     o     x
+;;                    |               |
+;;                   / \             / \
+;;                  o   o           o   o
+;;
+;; Trying to imagine what Emacs' undo is doing as you move about such a tree
+;; will likely frazzle your brain circuits! But in undo-tree-mode, you're just
+;; moving up and down this undo history tree. Most of the time, you'll
+;; probably only need to stay on the most recent branch, in which case it
+;; behaves like standard undo/redo, so is just as simple to understand. But if
+;; you ever need to recover a buffer state on a different branch, the
+;; possibility of switching between branches and accessing the full undo
+;; history is still there.
+;;
+;;
+;; Actually, it gets better. You don't have to imagine all these diagrams,
+;; because undo-tree-mode includes an undo-tree visualizer which draws them
+;; for you. In fact, it draws even better diagrams: it highlights the node
+;; representing the current buffer state, and it also highlights the current
+;; branch. (There's one other tiny difference: the visualizer puts the most
+;; recent branch on the left rather than the right, because it's slightly more
+;; convenient for really big trees.)
+
+
+
+;;; Change Log:
+;;
+;; Version 0.1
+;; * initial release
+
+
+;;; Code:
+
+(provide 'undo-tree)
 
 
 ;;; =====================================================================
@@ -817,3 +1232,6 @@ at POS."
       (setq buffer-read-only nil)
       (undo-tree-draw-tree buffer-undo-tree)
       (setq buffer-read-only t))))
+
+
+;;; undo-tree.el ends here
