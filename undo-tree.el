@@ -978,9 +978,10 @@ using `undo-tree-redo'."
 
 
 (defun undo-tree-draw-tree (undo-tree)
-  ;; Draw undo tree in current buffer.
+  ;; Draw UNDO-TREE in current buffer.
   (erase-buffer)
   (undo-tree-move-down 1)  ; top margin
+  (undo-tree-clear-visualizer-data undo-tree)
   (undo-tree-compute-widths undo-tree)
   (undo-tree-move-forward
    (max (/ (window-width) 2)
@@ -988,25 +989,40 @@ using `undo-tree-redo'."
 	   2)))  ; left margin
   ;; draw undo-tree
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
-	(max-lisp-eval-depth 1000000)
-	(max-specpdl-size 1000000))
-    (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
+	(stack (list (cons (move-marker (make-marker) (point))
+			   (undo-tree-root undo-tree))))
+	n)
+    (save-excursion
+      (while stack
+	(setq n (pop stack))
+	(goto-char (car n))
+	(setq n (undo-tree-draw-subtree (cdr n)))
+	(setq stack (append stack n)))))
   ;; highlight active branch
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
-	(max-lisp-eval-depth 1000000)
-	(max-specpdl-size 1000000))
-    (undo-tree-draw-subtree (undo-tree-root undo-tree) 'active))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+    (undo-tree-highlight-active-branch (undo-tree-root undo-tree)))
   ;; highlight current node
   (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
-  (put-text-property (point) (1+ (point))
-		     'face 'undo-tree-visualizer-current-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
+    (undo-tree-insert ?x)))
+
+
+(defun undo-tree-highlight-active-branch (node)
+  ;; Draw highlighted active branch below NODE in current buffer.
+  (let ((stack (list (cons (move-marker (make-marker) (point)) node)))
+	n)
+    (while stack
+      (setq n (pop stack))
+      (goto-char (car n))
+      (setq n (undo-tree-draw-subtree (cdr n) 'active))
+      (setq stack (append stack n)))))
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
   ;; Draw subtree rooted at NODE. The subtree will start from point.
   ;; If ACTIVE-BRANCH is positive, just draw active branch below NODE.
   (let ((num-children (length (undo-tree-node-next node)))
-	pos trunk-pos n)
+	node-list pos trunk-pos n)
 
     ;; draw node itself, and link it to node in tree
     (undo-tree-insert ?o)
@@ -1031,7 +1047,10 @@ using `undo-tree-redo'."
       (undo-tree-insert ?|)
       (backward-char 1)
       (undo-tree-move-down 1)
-      (undo-tree-draw-subtree (car (undo-tree-node-next node)) active-branch))
+      ;; add next node to list of nodes to draw next
+      (push (cons (move-marker (make-marker) (point))
+		  (car (undo-tree-node-next node)))
+	    node-list))
 
      ;; if node had multiple children, draw branches
      (t
@@ -1060,7 +1079,10 @@ using `undo-tree-redo'."
 	  (undo-tree-insert ?/)
 	  (backward-char 2)
 	  (undo-tree-move-down 1)
-	  (undo-tree-draw-subtree (car n) active-branch))
+	  ;; add node to list of nodes to draw next
+	  (push (cons (move-marker (make-marker) (point))
+		      (car n))
+		node-list))
 	(goto-char pos)
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car n))
@@ -1078,7 +1100,9 @@ using `undo-tree-redo'."
 	  (undo-tree-insert ?|)
 	  (backward-char 1)
 	  (undo-tree-move-down 1)
-	  (undo-tree-draw-subtree (car n) active-branch))
+	  (push (cons (move-marker (make-marker) (point))
+		      (car n))
+		node-list))
 	(goto-char pos)
 	(undo-tree-move-forward
 	 (+ (undo-tree-node-char-rwidth (car n))
@@ -1100,14 +1124,19 @@ using `undo-tree-redo'."
 	  (undo-tree-move-down 1)
 	  (undo-tree-insert ?\\)
 	  (undo-tree-move-down 1)
-	  (undo-tree-draw-subtree (car n) active-branch))
-	(goto-char pos)
-	(undo-tree-move-forward
-	 (+ (undo-tree-node-char-rwidth (car n))
-	    (if (cadr n) (undo-tree-node-char-lwidth (cadr n)) 0)
-	    undo-tree-visualizer-spacing 1))
-	(setq pos (point)))
-      ))))
+	  (push (cons (move-marker (make-marker) (point))
+		      (car n))
+		node-list))
+	(when (cdr n)
+	  (goto-char pos)
+	  (undo-tree-move-forward
+	   (+ (undo-tree-node-char-rwidth (car n))
+	      (if (cadr n) (undo-tree-node-char-lwidth (cadr n)) 0)
+	      undo-tree-visualizer-spacing 1))
+	  (setq pos (point))))
+      ))
+    ;; return list of nodes to draw next
+    (nreverse node-list)))
 
 
 
@@ -1128,7 +1157,8 @@ using `undo-tree-redo'."
 
 
 (defun undo-tree-insert (char &optional arg)
-  ;; Insert character CHAR ARG times, overwriting.
+  ;; Insert character CHAR ARG times, overwriting, and using
+  ;; `undo-tree-insert-face'.
   (unless arg (setq arg 1))
   (insert (make-string arg char))
   (undo-tree-move-forward arg)
@@ -1181,14 +1211,15 @@ using `undo-tree-redo'."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (setq buffer-read-only nil)
-  (put-text-property (point) (1+ (point)) 'face 'default)
+  (let ((undo-tree-insert-face 'default))
+    (undo-tree-insert ?o))
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-undo arg)
     (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (put-text-property (point) (1+ (point))
-		       'face 'undo-tree-visualizer-current-face)
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
+      (undo-tree-insert ?x))
     (setq buffer-read-only t)))
 
 
@@ -1197,14 +1228,15 @@ using `undo-tree-redo'."
   (interactive "p")
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (setq buffer-read-only nil)
-  (put-text-property (point) (1+ (point)) 'face 'default)
+  (let ((undo-tree-insert-face 'default))
+    (undo-tree-insert ?o))
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-redo arg)
     (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (put-text-property (point) (1+ (point))
-		       'face 'undo-tree-visualizer-current-face)
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
+      (undo-tree-insert ?x))
     (setq buffer-read-only t)))
 
 
@@ -1218,11 +1250,10 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   ;; un-highlight old active branch below current node
   (setq buffer-read-only nil)
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
-	(max-lisp-eval-depth 1000000)
-	(max-specpdl-size 1000000))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
     (save-excursion
-      (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
+      (undo-tree-highlight-active-branch
+       (undo-tree-current buffer-undo-tree))))
   ;; increment branch
   (let ((branch (undo-tree-node-branch (undo-tree-current buffer-undo-tree))))
   (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
@@ -1232,14 +1263,13 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
 	 ((<= (+ branch arg) 0) 0)
 	 (t (+ branch arg))))
   ;; highlight new active branch below current node
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
-	(max-lisp-eval-depth 1000000)
-	(max-specpdl-size 1000000))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (save-excursion
-      (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
+      (undo-tree-highlight-active-branch
+       (undo-tree-current buffer-undo-tree))))
   ;; re-highlight current node
-  (put-text-property (point) (1+ (point))
-		     'face 'undo-tree-visualizer-current-face)
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
+    (undo-tree-insert ?x))
   (setq buffer-read-only t)))
 
 
@@ -1270,9 +1300,8 @@ at POS."
       (undo-tree-set node)
       (set-buffer " *undo-tree*")
       (setq buffer-read-only nil)
-      (let ((max-lisp-eval-depth 1000000)
-	    (max-specpdl-size 1000000))
-	(undo-tree-draw-tree buffer-undo-tree))
+      ;; re-draw undo tree
+      (undo-tree-draw-tree buffer-undo-tree)
       (setq buffer-read-only t))))
 
 
