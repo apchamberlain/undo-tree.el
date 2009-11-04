@@ -550,6 +550,7 @@ in visualizer.")
   root current)
 
 
+
 (defstruct
   (undo-tree-node
    (:type vector)   ; create unnamed struct
@@ -567,6 +568,11 @@ in visualizer.")
 		  (branch 0)))
    (:copier nil))
   previous next undo redo timestamp branch visualizer)
+
+(defmacro undo-tree-node-p (n)
+  (let ((len (length (make-undo-tree-node nil nil))))
+    `(and (vectorp ,n) (= (length ,n) ,len))))
+
 
 
 (defstruct
@@ -656,80 +662,106 @@ part of `buffer-undo-tree'."
 
 (defun undo-tree-compute-widths (undo-tree)
   "Recursively compute widths for all UNDO-TREE's nodes."
-  (undo-tree-node-compute-widths (undo-tree-root undo-tree)))
+  (let ((stack (list (undo-tree-root undo-tree)))
+	res)
+    (while stack
+      ;; try to compute widths for node at top of stack
+      (if (undo-tree-node-p
+	   (setq res (undo-tree-node-compute-widths (car stack))))
+	  ;; if computation fails, it returns a node whose widths still need
+	  ;; computing, which we push onto the stack
+	  (push res stack)
+	;; otherwise, store widths and remove it from stack
+	(setf (undo-tree-node-lwidth (car stack)) (aref res 0)
+	      (undo-tree-node-cwidth (car stack)) (aref res 1)
+	      (undo-tree-node-rwidth (car stack)) (aref res 2))
+	(pop stack)))))
 
 
 (defun undo-tree-node-compute-widths (node)
-  "Compute NODE's left- and right-subtree widths."
+  ;; Compute NODE's left-, centre-, and right-subtree widths. Returns widths
+  ;; (in a vector) if successful. Otherwise, returns a node whose widths need
+  ;; calculating before NODE's can be calculated.
   (let ((num-children (length (undo-tree-node-next node)))
 	(lwidth 0) (cwidth 0) (rwidth 0)
 	p w)
-    (cond
-     ;; leaf nodes have 0 width
-     ((= 0 num-children)
-      (setf cwidth 1
-	    (undo-tree-node-lwidth node) 0
-	    (undo-tree-node-cwidth node) 1
-	    (undo-tree-node-rwidth node) 0))
+    (catch 'need-widths
+      (cond
+       ;; leaf nodes have 0 width
+       ((= 0 num-children)
+	(setf cwidth 1
+	      (undo-tree-node-lwidth node) 0
+	      (undo-tree-node-cwidth node) 1
+	      (undo-tree-node-rwidth node) 0))
 
-     ;; odd number of children
-     ((= (mod num-children 2) 1)
-      (setq p (undo-tree-node-next node))
-      ;; compute left-width
-      (dotimes (i (/ num-children 2))
-	(setq w (undo-tree-node-compute-widths (car p)))
-	(setq lwidth (+ lwidth (aref w 0) (aref w 1) (aref w 2)))
-	(setq p (cdr p)))
-      (setq w (undo-tree-node-compute-widths (car p))
-	    lwidth (+ lwidth (aref w 0)))
-      (setf (undo-tree-node-lwidth node) lwidth)
-      ;; centre-width is inherited from middle child
-      (setf cwidth (undo-tree-node-cwidth (car p))
-	    (undo-tree-node-cwidth node) cwidth)
-      ;; compute right-width
-      (setq rwidth (+ rwidth (aref w 2)))
-      (setq p (cdr p))
-      (dotimes (i (/ num-children 2))
-	(setq w (undo-tree-node-compute-widths (car p)))
-	(setq rwidth (+ rwidth (aref w 0) (aref w 1) (aref w 2)))
-	(setq p (cdr p)))
-      (setf (undo-tree-node-rwidth node) rwidth))
+       ;; odd number of children
+       ((= (mod num-children 2) 1)
+	(setq p (undo-tree-node-next node))
+	;; compute left-width
+	(dotimes (i (/ num-children 2))
+	  (if (undo-tree-node-lwidth (car p))
+	      (setq lwidth (+ lwidth
+			      (undo-tree-node-lwidth (car p))
+			      (undo-tree-node-cwidth (car p))
+			      (undo-tree-node-rwidth (car p))))
+	    ;; if child's widths haven't been computed, return that child
+	    (throw 'need-widths (car p)))
+	  (setq p (cdr p)))
+	(if (undo-tree-node-lwidth (car p))
+	    (setq lwidth (+ lwidth (undo-tree-node-lwidth (car p))))
+	  (throw 'need-widths (car p)))
+	;; centre-width is inherited from middle child
+	(setf cwidth (undo-tree-node-cwidth (car p)))
+	;; compute right-width
+	(setq rwidth (+ rwidth (undo-tree-node-rwidth (car p))))
+	(setq p (cdr p))
+	(dotimes (i (/ num-children 2))
+	  (if (undo-tree-node-lwidth (car p))
+	      (setq rwidth (+ rwidth
+			      (undo-tree-node-lwidth (car p))
+			      (undo-tree-node-cwidth (car p))
+			      (undo-tree-node-rwidth (car p))))
+	    (throw 'need-widths (car p)))
+	  (setq p (cdr p))))
 
-     ;; even number of children
-     (t
-      (setq p (undo-tree-node-next node))
-      ;; compute left-width
-      (dotimes (i (/ num-children 2))
-	(setq w (undo-tree-node-compute-widths (car p)))
-	(setq lwidth (+ lwidth (aref w 0) (aref w 1) (aref w 2)))
-	(setq p (cdr p)))
-      (setf (undo-tree-node-lwidth node) lwidth)
-      ;; compute right-width
-      (dotimes (i (/ num-children 2))
-	(setq w (undo-tree-node-compute-widths (car p)))
-	(setq rwidth (+ rwidth (aref w 0) (aref w 1) (aref w 2)))
-	(setq p (cdr p)))
-      (setf (undo-tree-node-rwidth node) rwidth)
-      ;; centre-width is 0 when number of children is even
-      (setf cwidth 0
-	    (undo-tree-node-cwidth node) 0)))
+       ;; even number of children
+       (t
+	(setq p (undo-tree-node-next node))
+	;; compute left-width
+	(dotimes (i (/ num-children 2))
+	  (if (undo-tree-node-lwidth (car p))
+	      (setq lwidth (+ lwidth
+			      (undo-tree-node-lwidth (car p))
+			      (undo-tree-node-cwidth (car p))
+			      (undo-tree-node-rwidth (car p))))
+	    (throw 'need-widths (car p)))
+	  (setq p (cdr p)))
+	;; centre-width is 0 when number of children is even
+	(setq cwidth 0)
+	;; compute right-width
+	(dotimes (i (/ num-children 2))
+	  (if (undo-tree-node-lwidth (car p))
+	      (setq rwidth (+ rwidth
+			      (undo-tree-node-lwidth (car p))
+			      (undo-tree-node-cwidth (car p))
+			      (undo-tree-node-rwidth (car p))))
+	    (throw 'need-widths (car p)))
+	  (setq p (cdr p)))))
 
-    ;; return left-, centre- and right-widths
-    (vector lwidth cwidth rwidth)))
+      ;; return left-, centre- and right-widths
+      (vector lwidth cwidth rwidth))))
 
 
 
 (defun undo-tree-clear-visualizer-data (undo-tree)
   ;; Clear visualizer data from UNDO-TREE.
-  (undo-tree-node-clear-visualizer-data (undo-tree-root undo-tree)))
-
-
-(defun undo-tree-node-clear-visualizer-data (node)
-  ;; Recursively clear visualizer data from NODE and descendents.
-  (setf (undo-tree-node-visualizer node) nil)
-  (dolist (n (undo-tree-node-next node))
-    (undo-tree-node-clear-visualizer-data n)))
-
+  (let ((stack (list (undo-tree-root undo-tree)))
+	node)
+    (while stack
+      (setq node (pop stack))
+      (setf (undo-tree-node-visualizer node) nil)
+      (dolist (n (undo-tree-node-next node))
+	(push n stack)))))
 
 
 (defun undo-tree-position (node list)
@@ -955,10 +987,14 @@ using `undo-tree-redo'."
 	(+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
 	   2)))  ; left margin
   ;; draw undo-tree
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
+	(max-lisp-eval-depth 1000000)
+	(max-specpdl-size 1000000))
     (save-excursion (undo-tree-draw-subtree (undo-tree-root undo-tree))))
   ;; highlight active branch
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
+	(max-lisp-eval-depth 1000000)
+	(max-specpdl-size 1000000))
     (undo-tree-draw-subtree (undo-tree-root undo-tree) 'active))
   ;; highlight current node
   (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
@@ -1182,7 +1218,9 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   ;; un-highlight old active branch below current node
   (setq buffer-read-only nil)
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
+	(max-lisp-eval-depth 1000000)
+	(max-specpdl-size 1000000))
     (save-excursion
       (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
   ;; increment branch
@@ -1194,7 +1232,9 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
 	 ((<= (+ branch arg) 0) 0)
 	 (t (+ branch arg))))
   ;; highlight new active branch below current node
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
+	(max-lisp-eval-depth 1000000)
+	(max-specpdl-size 1000000))
     (save-excursion
       (undo-tree-draw-subtree (undo-tree-current buffer-undo-tree) 'active)))
   ;; re-highlight current node
@@ -1230,7 +1270,9 @@ at POS."
       (undo-tree-set node)
       (set-buffer " *undo-tree*")
       (setq buffer-read-only nil)
-      (undo-tree-draw-tree buffer-undo-tree)
+      (let ((max-lisp-eval-depth 1000000)
+	    (max-specpdl-size 1000000))
+	(undo-tree-draw-tree buffer-undo-tree))
       (setq buffer-read-only t))))
 
 
