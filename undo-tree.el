@@ -91,6 +91,9 @@
 ;; <right>  f  C-f  (`undo-tree-visualize-switch-next-branch')
 ;;   Switch to next undo-tree branch.
 ;;
+;; t
+;;   Toggle display of time-stamps.
+;;
 ;; q  C-q
 ;;   Quit undo-tree-visualizer.
 ;;
@@ -399,10 +402,11 @@
 ;; Actually, it gets better. You don't have to imagine all these diagrams,
 ;; because undo-tree-mode includes an undo-tree visualizer which draws them
 ;; for you. In fact, it draws even better diagrams: it highlights the node
-;; representing the current buffer state, and it also highlights the current
-;; branch. (There's one other tiny difference: the visualizer puts the most
-;; recent branch on the left rather than the right, because it's slightly more
-;; convenient for really big trees.)
+;; representing the current buffer state, it highlights the current branch,
+;; and it can optionally display time-stamps for each buffer state. (There's
+;; one other tiny difference: the visualizer puts the most recent branch on
+;; the left rather than the right, because it's slightly more convenient for
+;; really big trees.)
 
 
 
@@ -432,10 +436,11 @@
 
 (defcustom undo-tree-visualizer-spacing 3
   "Horizontal spacing in undo-tree visualization.
-Must be an odd integer."
+Must be a postivie odd integer."
   :group 'undo-tree
   :type '(integer
- 	  :match (lambda (w n) (and (integerp n) (= (mod n 2) 1)))))
+ 	  :match (lambda (w n) (and (integerp n) (> n 0) (= (mod n 2) 1)))))
+(make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
 
 (defvar undo-tree-map nil
@@ -460,13 +465,17 @@ in visualizer.")
 in visualizer.")
 
 
+(defvar undo-tree-visualizer-map nil
+  "Keymap used in undo-tree visualizer.")
+
+
 (defvar undo-tree-visualizer-buffer nil
   "Parent buffer in visualizer.")
 (make-variable-buffer-local 'undo-tree-visualizer-buffer)
 
-
-(defvar undo-tree-visualizer-map nil
-  "Keymap used in undo-tree visualizer.")
+(defvar undo-tree-visualizer-timestamps nil
+  "Non-nil when visualizer is displaying time-stamps.")
+(make-variable-buffer-local 'undo-tree-visualizer-timestamps)
 
 
 
@@ -517,6 +526,9 @@ in visualizer.")
   ;; mouse sets buffer state to node at click
   (define-key undo-tree-visualizer-map [mouse-1]
     'undo-tree-visualizer-set)
+  ;; toggle timestamps
+  (define-key undo-tree-visualizer-map "t"
+    'undo-tree-visualizer-toggle-timestamps)
   ;; horizontal scrolling may be needed if tree is very wide
   (define-key undo-tree-visualizer-map ","
     (lambda () (interactive) "Scroll right." (scroll-right 1 t)))
@@ -977,16 +989,19 @@ using `undo-tree-redo'."
     (setq buffer-read-only t)))
 
 
+
 (defun undo-tree-draw-tree (undo-tree)
   ;; Draw UNDO-TREE in current buffer.
   (erase-buffer)
-  (undo-tree-move-down 1)  ; top margin
+  (undo-tree-move-down 1)      ; top margin
   (undo-tree-clear-visualizer-data undo-tree)
   (undo-tree-compute-widths undo-tree)
   (undo-tree-move-forward
    (max (/ (window-width) 2)
 	(+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
-	   2)))  ; left margin
+	   ;; add space for left part of left-most time-stamp
+	   (if undo-tree-visualizer-timestamps 4 0)
+	   2)))                ; left margin
   ;; draw undo-tree
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
 	(stack (list (undo-tree-root undo-tree)))
@@ -997,19 +1012,19 @@ using `undo-tree-redo'."
       (set-marker-insertion-type (undo-tree-node-marker n) nil))
     (move-marker (undo-tree-node-marker n) (point))
     ;; draw nodes from stack until stack is empty
-    (save-excursion
-      (while stack
-	(setq n (pop stack))
-	(goto-char (undo-tree-node-marker n))
-	(setq n (undo-tree-draw-subtree n))
-	(setq stack (append stack n)))))
+    (while stack
+      (setq n (pop stack))
+      (goto-char (undo-tree-node-marker n))
+      (setq n (undo-tree-draw-subtree n nil))
+      (setq stack (append stack n))))
   ;; highlight active branch
+  (goto-char (undo-tree-node-marker (undo-tree-root undo-tree)))
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-highlight-active-branch (undo-tree-root undo-tree)))
   ;; highlight current node
-  (goto-char (undo-tree-node-marker (undo-tree-current undo-tree)))
   (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-    (undo-tree-insert ?x)))
+    (undo-tree-draw-node (undo-tree-current undo-tree) 'current)))
+
 
 
 (defun undo-tree-highlight-active-branch (node)
@@ -1028,16 +1043,34 @@ using `undo-tree-redo'."
       (setq stack (append stack node)))))
 
 
+
+(defun undo-tree-draw-node (node &optional current)
+  ;; Highlight NODE as current node.
+  (goto-char (undo-tree-node-marker node))
+  (if undo-tree-visualizer-timestamps
+      (progn
+	(backward-char 4)
+	(if current (undo-tree-insert ?*) (undo-tree-insert ? ))
+	(undo-tree-insert
+	 (undo-tree-timestamp-to-string (undo-tree-node-timestamp node)))
+	(backward-char 5)
+	(move-marker (undo-tree-node-marker node) (point))
+	(put-text-property (- (point) 3) (+ (point) 5)
+			   'undo-tree-node node))
+    (if current (undo-tree-insert ?x) (undo-tree-insert ?o))
+    (backward-char 1)
+    (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
+
+
+
 (defun undo-tree-draw-subtree (node &optional active-branch)
   ;; Draw subtree rooted at NODE. The subtree will start from point.
-  ;; If ACTIVE-BRANCH is positive, just draw active branch below NODE.
+  ;; If ACTIVE-BRANCH is non-nil, just draw active branch below NODE.
+  ;; If TIMESTAP is non-nil, draw time-stamps instead of "o" at nodes.
   (let ((num-children (length (undo-tree-node-next node)))
 	node-list pos trunk-pos n)
-
-    ;; draw node itself, and link it back to node in tree
-    (undo-tree-insert ?o)
-    (backward-char 1)
-    (put-text-property (point) (1+ (point)) 'undo-tree-node node)
+    ;; draw node itself
+    (undo-tree-draw-node node)
 
     (cond
      ;; if we're at a leaf node, we're done
@@ -1178,16 +1211,19 @@ using `undo-tree-redo'."
 	   (1+ (/ undo-tree-visualizer-spacing 2)) 0))))
 
 
-(defun undo-tree-insert (char &optional arg)
-  ;; Insert character CHAR ARG times, overwriting, and using
+(defun undo-tree-insert (str &optional arg)
+  ;; Insert character or string STR ARG times, overwriting, and using
   ;; `undo-tree-insert-face'.
   (unless arg (setq arg 1))
-  (insert (make-string arg char))
+  (when (characterp str)
+    (setq str (make-string arg str))
+    (setq arg 1))
+  (dotimes (i arg) (insert str))
+  (setq arg (* arg (length str)))
   (undo-tree-move-forward arg)
   (backward-delete-char arg)
   (when (boundp 'undo-tree-insert-face)
-    (put-text-property (- (point) arg) (point)
-		       'face undo-tree-insert-face)))
+    (put-text-property (- (point) arg) (point) 'face undo-tree-insert-face)))
 
 
 (defun undo-tree-move-down (&optional arg)
@@ -1214,6 +1250,12 @@ using `undo-tree-redo'."
       (insert (make-string (- arg n) ? )))))
 
 
+(defun undo-tree-timestamp-to-string (timestamp)
+  ;; Convert TIMESTAMP to hh:mm:ss string.
+  (let ((time (decode-time timestamp)))
+    (format "%02d:%02d:%02d" (nth 2 time) (nth 1 time) (nth 0 time))))
+
+
 
 ;;; =====================================================================
 ;;;                    Visualizer mode commands
@@ -1231,34 +1273,31 @@ using `undo-tree-redo'."
 (defun undo-tree-visualize-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
-  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (setq buffer-read-only nil)
-  (let ((undo-tree-insert-face 'default))
-    (undo-tree-insert ?o))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-undo arg)
     (switch-to-buffer-other-window " *undo-tree*")
-    (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-      (undo-tree-insert ?x))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
     (setq buffer-read-only t)))
 
 
 (defun undo-tree-visualize-redo (&optional arg)
   "Redo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
-  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (setq buffer-read-only nil)
-  (let ((undo-tree-insert-face 'default))
-    (undo-tree-insert ?o))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-buffer)
   (unwind-protect
       (undo-tree-redo arg)
     (switch-to-buffer-other-window " *undo-tree*")
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-      (undo-tree-insert ?x))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
     (setq buffer-read-only t)))
 
 
@@ -1267,15 +1306,11 @@ using `undo-tree-redo'."
 This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive "p")
-  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
-  (switch-to-buffer-other-window " *undo-tree*")
   ;; un-highlight old active branch below current node
   (setq buffer-read-only nil)
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
-    (save-excursion
-      (undo-tree-highlight-active-branch
-       (undo-tree-current buffer-undo-tree))))
+    (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
   ;; increment branch
   (let ((branch (undo-tree-node-branch (undo-tree-current buffer-undo-tree))))
   (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
@@ -1285,13 +1320,12 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
 	 ((<= (+ branch arg) 0) 0)
 	 (t (+ branch arg))))
   ;; highlight new active branch below current node
+  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
-    (save-excursion
-      (undo-tree-highlight-active-branch
-       (undo-tree-current buffer-undo-tree))))
+    (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
   ;; re-highlight current node
   (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-    (undo-tree-insert ?x))
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
   (setq buffer-read-only t)))
 
 
@@ -1325,6 +1359,21 @@ at POS."
       ;; re-draw undo tree
       (undo-tree-draw-tree buffer-undo-tree)
       (setq buffer-read-only t))))
+
+
+(defun undo-tree-visualizer-toggle-timestamps ()
+  "Toggle display of time-stamps."
+  (interactive)
+  (setq undo-tree-visualizer-spacing
+	(if (setq undo-tree-visualizer-timestamps
+		  (not undo-tree-visualizer-timestamps))
+	    ;; need sufficient space if TIMESTAMP is set
+	    (max 9 (default-value 'undo-tree-visualizer-spacing))
+	  (default-value 'undo-tree-visualizer-spacing)))
+  ;; redraw tree
+  (setq buffer-read-only nil)
+  (undo-tree-draw-tree buffer-undo-tree)
+  (setq buffer-read-only t))
 
 
 ;;; undo-tree.el ends here
