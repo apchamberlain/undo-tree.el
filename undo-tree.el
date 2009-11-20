@@ -300,12 +300,12 @@
 ;; traverse the entire string of undos again to get back to the point at which
 ;; you broke the chain. Commands such as `undo-only', and undo in region (in
 ;; transient-mark-mode), help make using Emacs' undo a little easier, but
-;; nonetheless it remains confusing.
+;; nonetheless it remains confusing for many people.
 ;;
 ;;
 ;; So what does undo-tree mode do? Remember the diagram we drew to represent
-;; the history we've been discussing (make a few edits, undo a couple of
-;; times, and edit again)? The diagram that conceptually represented our undo
+;; the history we've been discussing (make a few edits, undo a couple of them,
+;; and edit again)? The diagram that conceptually represented our undo
 ;; history, before we started discussing specific undo systems? It looked like
 ;; this:
 ;;
@@ -320,11 +320,11 @@
 ;;                                |
 ;;                                o
 ;;
-;; Well, that's *exactly* what the undo history looks like to undo-tree-mode.
-;; It doesn't discard the old branch (as standard undo/redo does), nor does it
-;; treat undos as new changes to be added to the end of a linear string of
-;; buffer states (as Emacs' undo does). It just keeps track of the tree of
-;; branching changes that make up the entire undo history.
+;; Well, that's *exactly* what the undo history looks like to
+;; `undo-tree-mode'.  It doesn't discard the old branch (as standard undo/redo
+;; does), nor does it treat undos as new changes to be added to the end of a
+;; linear string of buffer states (as Emacs' undo does). It just keeps track
+;; of the tree of branching changes that make up the entire undo history.
 ;;
 ;; If you undo from this point, you'll rewind back up the tree to the previous
 ;; state:
@@ -357,8 +357,8 @@
 ;;
 ;; So far, this is just like the standard undo/redo system. But what if you
 ;; want to return to a buffer state located on a previous branch of the
-;; history? Since undo-tree-mode keeps the entire history, you simply need to
-;; tell it to switch to a different branch, and then redo the changes you
+;; history? Since `undo-tree-mode' keeps the entire history, you simply need
+;; to tell it to switch to a different branch, and then redo the changes you
 ;; want:
 ;;
 ;;                                o
@@ -391,17 +391,17 @@
 ;;
 ;; Trying to imagine what Emacs' undo is doing as you move about such a tree
 ;; will likely frazzle your brain circuits! But in undo-tree-mode, you're just
-;; moving up and down this undo history tree. Most of the time, you'll
-;; probably only need to stay on the most recent branch, in which case it
-;; behaves like standard undo/redo, so is just as simple to understand. But if
-;; you ever need to recover a buffer state on a different branch, the
-;; possibility of switching between branches and accessing the full undo
-;; history is still there.
+;; moving around this undo history tree. Most of the time, you'll probably
+;; only need to stay on the most recent branch, in which case it behaves like
+;; standard undo/redo, so is just as simple to understand. But if you ever
+;; need to recover a buffer state on a different branch, the possibility of
+;; switching between branches and accessing the full undo history is still
+;; there.
 ;;
 ;;
 ;; Actually, it gets better. You don't have to imagine all these diagrams,
-;; because undo-tree-mode includes an undo-tree visualizer which draws them
-;; for you. In fact, it draws even better diagrams: it highlights the node
+;; because `undo-tree-mode' includes an undo-tree visualizer which draws them
+;; for you! In fact, it draws even better diagrams: it highlights the node
 ;; representing the current buffer state, it highlights the current branch,
 ;; and it can optionally display time-stamps for each buffer state. (There's
 ;; one other tiny difference: the visualizer puts the most recent branch on
@@ -417,9 +417,6 @@
 
 
 ;;; Code:
-
-(provide 'undo-tree)
-
 
 ;;; =====================================================================
 ;;;              Global variables and customization options
@@ -799,31 +796,44 @@ Comparison is done with 'eq."
   ;; discard undo boundaries at head of list
   (while (null (car buffer-undo-list))
     (setq buffer-undo-list (cdr buffer-undo-list)))
-  ;; pop elements up to next undo boundary
-  (let* ((changeset (cons (pop buffer-undo-list) nil))
-	 (p changeset))
-    (while (car buffer-undo-list)
-      (setcdr p (cons (pop buffer-undo-list) nil))
-      (setq p (cdr p)))
-    changeset))
+  (unless (eq (car buffer-undo-list) 'undo-tree-canary)
+    ;; pop elements up to next undo boundary
+    (let* ((changeset (cons (pop buffer-undo-list) nil))
+	   (p changeset))
+      (while (car buffer-undo-list)
+	(setcdr p (cons (pop buffer-undo-list) nil))
+	(setq p (cdr p)))
+      changeset)))
 
 
 (defun undo-list-transfer-to-tree ()
   ;; Transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'.
-  (when buffer-undo-list
-    ;; create new node from first changeset in `buffer-undo-list', save old
-    ;; `buffer-undo-tree' current node, and make new node the current node
-    (let* ((node (make-undo-tree-node nil (undo-list-pop-changeset)))
-	   (splice (undo-tree-current buffer-undo-tree)))
-      (setf (undo-tree-current buffer-undo-tree) node)
-      ;; grow tree fragment backwards from new node using `buffer-undo-list'
-      ;; changesets
-      (while buffer-undo-list
-	(setq node (undo-tree-grow-backwards node (undo-list-pop-changeset))))
-      ;; splice tree fragment onto end of old `buffer-undo-tree' current node
-      (setf (undo-tree-node-previous node) splice)
-      (push node (undo-tree-node-next splice))
-      (setf (undo-tree-node-branch splice) 0))))
+  (if (null buffer-undo-list)
+      (push 'undo-tree-canary buffer-undo-list)
+    (when (not (eq (cadr buffer-undo-list) 'undo-tree-canary))
+      ;; create new node from first changeset in `buffer-undo-list', save old
+      ;; `buffer-undo-tree' current node, and make new node the current node
+      (let* ((node (make-undo-tree-node nil (undo-list-pop-changeset)))
+	     (splice (undo-tree-current buffer-undo-tree)))
+	(setf (undo-tree-current buffer-undo-tree) node)
+	;; grow tree fragment backwards using `buffer-undo-list' changesets
+	(while (and buffer-undo-list
+		    (not (eq (cadr buffer-undo-list) 'undo-tree-canary)))
+	  (setq node (undo-tree-grow-backwards node (undo-list-pop-changeset))))
+	;; if no undo history has been discarded from `buffer-undo-list' since
+	;; last transfer, splice new tree fragment onto end of old
+	;; `buffer-undo-tree' current node
+	(if (eq (cadr buffer-undo-list) 'undo-tree-canary)
+	    (progn
+	      (setf (undo-tree-node-previous node) splice)
+	      (push node (undo-tree-node-next splice))
+	      (setf (undo-tree-node-branch splice) 0))
+	  ;; if undo history has been discarded, replace entire
+	  ;; `buffer-undo-tree' with new tree fragment
+	  (setq node (undo-tree-grow-backwards node nil))
+	  (setf (undo-tree-root buffer-undo-tree) node)
+	  (push 'undo-tree-canary buffer-undo-list))
+	))))
 
 
 
@@ -842,7 +852,10 @@ powerful yet easier to use version, that treats the undo history
 as what it is: a tree."
   nil             ; init value
   ""              ; lighter
-  undo-tree-map)  ; keymap
+  undo-tree-map   ; keymap
+  ;; if disabling `undo-tree-mode', remove "canary" from `buffer-undo-list'
+  (unless undo-tree-mode (setq buffer-undo-list nil)))
+
 
 
 (defun turn-on-undo-tree-mode ()
@@ -858,6 +871,9 @@ as what it is: a tree."
 (defun undo-tree-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
+  ;; throw error if undo is disabled in buffer
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
+
   ;; if `buffer-undo-tree' is empty, create initial undo-tree
   (when (null buffer-undo-tree)
     (setq buffer-undo-tree (make-undo-tree)))
@@ -889,6 +905,9 @@ as what it is: a tree."
 (defun undo-tree-redo (&optional arg)
   "Redo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
+  ;; throw error if undo is disabled in buffer
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
+
   ;; if `buffer-undo-tree' is empty, create initial undo-tree
   (when (null buffer-undo-tree)
     (setq buffer-undo-tree (make-undo-tree)))
@@ -898,7 +917,7 @@ as what it is: a tree."
   (let ((current (undo-tree-current buffer-undo-tree)))
     (dotimes (i (or arg 1))
       ;; check if at bottom of undo tree
-      (if (null (undo-tree-node-next (undo-tree-current buffer-undo-tree)))
+      (if (null (undo-tree-node-next current))
 	  (error "No further redo information")
 	;; advance current node
 	(setq current
@@ -909,7 +928,8 @@ as what it is: a tree."
 	(primitive-undo 1 (undo-copy-list (undo-tree-node-redo current)))
 	;; discard undo entries that `primitive-undo' has added to
 	;; `buffer-undo-list' since we already know how to undo from here
-	;; (note: could overwrite old undo entry instead for safety's sake?)
+	;; (NOTE: should we instead overwrite old undo entry for safety's
+	;;        sake?)
 	(setq buffer-undo-list nil)
 	)))
   ;; inform user if at branch point
@@ -923,12 +943,29 @@ as what it is: a tree."
 This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo'."
   (interactive (list (or (and prefix-arg (prefix-numeric-value prefix-arg))
-			 (read-number
-			  (format "Branch (0-%d): "
-				  (1- (undo-tree-num-branches)))))))
+			 (and (not (eq buffer-undo-list t))
+			      (or buffer-undo-tree
+				  (progn
+				    (setq buffer-undo-tree (make-undo-tree))
+				    (undo-list-transfer-to-tree)
+				    t))
+			      (> (undo-tree-num-branches) 1)
+			      (read-number
+			       (format "Branch (0-%d): "
+				       (1- (undo-tree-num-branches))))))))
+  ;; throw error if undo is disabled in buffer
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
   ;; sanity check branch number
-  (if (or (< branch 0) (> branch (1- (undo-tree-num-branches))))
-      (error "Invalid branch number")
+  (when (<= (undo-tree-num-branches) 1) (error "Not at undo branch point"))
+  (when (or (< branch 0) (> branch (1- (undo-tree-num-branches))))
+    (error "Invalid branch number")
+
+    ;; if `buffer-undo-tree' is empty, create initial undo-tree
+    (when (null buffer-undo-tree)
+      (setq buffer-undo-tree (make-undo-tree)))
+    ;; transfer entries accumulated in `buffer-undo-list' to
+    ;; `buffer-undo-tree'
+    (undo-list-transfer-to-tree)
     ;; switch branch
     (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
 	  branch)))
@@ -971,6 +1008,8 @@ using `undo-tree-redo'."
 (defun undo-tree-visualize ()
   "Visualize the current buffer's undo tree."
   (interactive)
+  ;; throw error if undo is disabled in buffer
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
   ;; if `buffer-undo-tree' is empty, create initial undo-tree
   (when (null buffer-undo-tree)
     (setq buffer-undo-tree (make-undo-tree)))
@@ -1087,7 +1126,7 @@ using `undo-tree-redo'."
       (undo-tree-insert ?|)
       (backward-char 1)
       (undo-tree-move-down 1)
-      (setq n (undo-tree-node-next node))
+      (setq n (car (undo-tree-node-next node)))
       ;; link next node to its representation in visualizer
       (unless (markerp (undo-tree-node-marker n))
 	(setf (undo-tree-node-marker n) (make-marker))
@@ -1375,5 +1414,8 @@ at POS."
   (undo-tree-draw-tree buffer-undo-tree)
   (setq buffer-read-only t))
 
+
+
+(provide 'undo-tree)
 
 ;;; undo-tree.el ends here
