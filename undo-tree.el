@@ -426,6 +426,10 @@
 (make-variable-buffer-local 'buffer-undo-tree)
 
 
+(defconst undo-tree-cons-byte-size 8
+  "Size (in bytes) of a cons cell.")
+
+
 (defgroup undo-tree nil
   "Tree undo/redo."
   :group 'undo)
@@ -577,6 +581,7 @@ in visualizer.")
 		  (branch 0)))
    (:copier nil))
   previous next undo redo timestamp branch visualizer)
+
 
 (defmacro undo-tree-node-p (n)
   (let ((len (length (make-undo-tree-node nil nil))))
@@ -761,7 +766,6 @@ part of `buffer-undo-tree'."
       (vector lwidth cwidth rwidth))))
 
 
-
 (defun undo-tree-clear-visualizer-data (undo-tree)
   ;; Clear visualizer data from UNDO-TREE.
   (let ((stack (list (undo-tree-root undo-tree)))
@@ -790,6 +794,32 @@ Comparison is done with 'eq."
   ;; Return number of branches at current undo tree node.
   '(length (undo-tree-node-next (undo-tree-current buffer-undo-tree))))
 
+
+(defun undo-tree-oldest-leaf (node)
+  ;; Return oldest leaf node below NODE.
+  (while (undo-tree-node-next node)
+    (setq node
+	  (car (sort (mapcar 'identity (undo-tree-node-next node))
+		     (lambda (a b)
+		       (time-less-p (undo-tree-node-timestamp a)
+				    (undo-tree-node-timestamp b)))))))
+  node)
+
+
+(defun undo-tree-discard-node (node)
+  ;; Discrard NODE, and return next in line for discarding.
+  (let ((parent (undo-tree-node-previous node)))
+  (when parent
+    (setf (undo-tree-node-next parent)
+	  (delq node (undo-tree-node-next parent)))
+    (if (undo-tree-node-next parent)
+	(undo-tree-oldest-leaf parent)
+      parent))))
+
+
+
+;;; =====================================================================
+;;;         Utility functions for handling `buffer-undo-list'
 
 (defun undo-list-pop-changeset ()
   ;; Pop changeset from `buffer-undo-list'.
@@ -835,6 +865,16 @@ Comparison is done with 'eq."
 	  (push 'undo-tree-canary buffer-undo-list))
 	))))
 
+
+(defun undo-list-size (undo-list)
+  ;; Return size (in bytes) of UNDO-LIST
+  (let ((size 0) (p undo-list))
+    (while p
+      (setq size (+ size undo-tree-cons-byte-size))
+      (when (and (consp (car p)) (stringp (caar p)))
+	(setq size (+ size (string-bytes (caar p)))))
+      (setq p (cdr p)))
+    size))
 
 
 
