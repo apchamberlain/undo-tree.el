@@ -895,6 +895,9 @@ as what it is: a tree."
       ;; rewind current node
       (setf (undo-tree-current buffer-undo-tree)
 	    (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
+      ;; update timestamp
+      (setf (undo-tree-node-timestamp (undo-tree-current buffer-undo-tree))
+	    (current-time))
       ))
   ;; inform user if at branch point
   (when (> (undo-tree-num-branches) 1)
@@ -924,6 +927,8 @@ as what it is: a tree."
 	      (setf (undo-tree-current buffer-undo-tree)
 		    (nth (undo-tree-node-branch current)
 			 (undo-tree-node-next current))))
+	;; update timestamp
+	(setf (undo-tree-node-timestamp current) (current-time))
 	;; redo one record from undo tree
 	(primitive-undo 1 (undo-copy-list (undo-tree-node-redo current)))
 	;; discard undo entries that `primitive-undo' has added to
