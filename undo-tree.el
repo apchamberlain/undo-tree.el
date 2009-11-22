@@ -426,14 +426,9 @@
 (make-variable-buffer-local 'buffer-undo-tree)
 
 
-(defconst undo-tree-cons-byte-size 8
-  "Size (in bytes) of a cons cell.")
-
-
 (defgroup undo-tree nil
   "Tree undo/redo."
   :group 'undo)
-
 
 (defcustom undo-tree-visualizer-spacing 3
   "Horizontal spacing in undo-tree visualization.
@@ -443,28 +438,23 @@ Must be a postivie odd integer."
  	  :match (lambda (w n) (and (integerp n) (> n 0) (= (mod n 2) 1)))))
 (make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
-
 (defvar undo-tree-map nil
   "Keymap used in undo-tree-mode.")
-
 
 
 (defface undo-tree-visualizer-default-face
   '((((class color)) :foreground "gray"))
   "*Face used to draw undo-tree in visualizer.")
 
-
 (defface undo-tree-visualizer-current-face
   '((((class color)) :foreground "red"))
   "*Face used to highlight current undo-tree node
 in visualizer.")
 
-
 (defface undo-tree-visualizer-active-branch-face
   '((((class color)) :foreground "white" :weight bold))
   "*Face used to highlight active undo-tree branch
 in visualizer.")
-
 
 (defvar undo-tree-visualizer-map nil
   "Keymap used in undo-tree visualizer.")
@@ -558,9 +548,10 @@ in visualizer.")
    (:constructor make-undo-tree
 		 (&aux
 		  (root (make-undo-tree-node nil nil))
-		  (current root)))
+		  (current root)
+		  (size 0)))
    (:copier nil))
-  root current)
+  root current size)
 
 
 
@@ -714,25 +705,23 @@ part of `buffer-undo-tree'."
 	;; compute left-width
 	(dotimes (i (/ num-children 2))
 	  (if (undo-tree-node-lwidth (car p))
-	      (setq lwidth (+ lwidth
-			      (undo-tree-node-lwidth (car p))
+	      (incf lwidth (+ (undo-tree-node-lwidth (car p))
 			      (undo-tree-node-cwidth (car p))
 			      (undo-tree-node-rwidth (car p))))
 	    ;; if child's widths haven't been computed, return that child
 	    (throw 'need-widths (car p)))
 	  (setq p (cdr p)))
 	(if (undo-tree-node-lwidth (car p))
-	    (setq lwidth (+ lwidth (undo-tree-node-lwidth (car p))))
+	    (incf lwidth (undo-tree-node-lwidth (car p)))
 	  (throw 'need-widths (car p)))
 	;; centre-width is inherited from middle child
 	(setf cwidth (undo-tree-node-cwidth (car p)))
 	;; compute right-width
-	(setq rwidth (+ rwidth (undo-tree-node-rwidth (car p))))
+	(incf rwidth (undo-tree-node-rwidth (car p)))
 	(setq p (cdr p))
 	(dotimes (i (/ num-children 2))
 	  (if (undo-tree-node-lwidth (car p))
-	      (setq rwidth (+ rwidth
-			      (undo-tree-node-lwidth (car p))
+	      (incf rwidth (+ (undo-tree-node-lwidth (car p))
 			      (undo-tree-node-cwidth (car p))
 			      (undo-tree-node-rwidth (car p))))
 	    (throw 'need-widths (car p)))
@@ -744,8 +733,7 @@ part of `buffer-undo-tree'."
 	;; compute left-width
 	(dotimes (i (/ num-children 2))
 	  (if (undo-tree-node-lwidth (car p))
-	      (setq lwidth (+ lwidth
-			      (undo-tree-node-lwidth (car p))
+	      (incf lwidth (+ (undo-tree-node-lwidth (car p))
 			      (undo-tree-node-cwidth (car p))
 			      (undo-tree-node-rwidth (car p))))
 	    (throw 'need-widths (car p)))
@@ -755,8 +743,7 @@ part of `buffer-undo-tree'."
 	;; compute right-width
 	(dotimes (i (/ num-children 2))
 	  (if (undo-tree-node-lwidth (car p))
-	      (setq rwidth (+ rwidth
-			      (undo-tree-node-lwidth (car p))
+	      (incf rwidth (+ (undo-tree-node-lwidth (car p))
 			      (undo-tree-node-cwidth (car p))
 			      (undo-tree-node-rwidth (car p))))
 	    (throw 'need-widths (car p)))
@@ -807,14 +794,118 @@ Comparison is done with 'eq."
 
 
 (defun undo-tree-discard-node (node)
-  ;; Discrard NODE, and return next in line for discarding.
-  (let ((parent (undo-tree-node-previous node)))
-  (when parent
-    (setf (undo-tree-node-next parent)
-	  (delq node (undo-tree-node-next parent)))
-    (if (undo-tree-node-next parent)
-	(undo-tree-oldest-leaf parent)
-      parent))))
+  ;; Discard NODE from `buffer-undo-tree', and return next in line for
+  ;; discarding.
+
+  ;; don't discard current node
+  (unless (eq node (undo-tree-current buffer-undo-tree))
+    (decf (undo-tree-size buffer-undo-tree)
+	  (+ (undo-list-byte-size (undo-tree-node-undo node))
+	     (undo-list-byte-size (undo-tree-node-redo node))))
+
+    ;; discarding root node
+    (if (eq node (undo-tree-root buffer-undo-tree))
+	(cond
+	 ;; should always discard branches before root
+	 ((> (length (undo-tree-node-next node)) 1)
+	  (error "Trying to discard undo-tree root which still\
+ has multiple branches"))
+	 ;; don't discard root if current node is only child
+	 ((eq (car (undo-tree-node-next node))
+	      (undo-tree-current buffer-undo-tree)))
+	 (t
+	  ;; make child of root into new root
+	  (setf node (setf (undo-tree-root buffer-undo-tree)
+			   (car (undo-tree-node-next node)))
+		(undo-tree-node-undo node) nil
+		(undo-tree-node-redo node) nil)
+	  ;; if new root has branches, or new root is current node, next node
+	  ;; to discard is oldest leaf, otherwise it's new root
+	  (if (or (> (length (undo-tree-node-next node)) 1)
+		  (eq (car (undo-tree-node-next node))
+		      (undo-tree-current buffer-undo-tree)))
+	      (undo-tree-oldest-leaf node)
+	    node)))
+
+      ;; discarding leaf node
+      (let* ((parent (undo-tree-node-previous node))
+	     (current (nth (undo-tree-node-branch parent)
+			   (undo-tree-node-next parent))))
+	(setf (undo-tree-node-next parent)
+	      (delq node (undo-tree-node-next parent))
+	      (undo-tree-node-branch parent)
+	      (undo-tree-position current (undo-tree-node-next parent)))
+	;; if parent has branches, or parent is current node, next node to
+	;; discard is oldest lead, otherwise it's parent
+	(if (or (eq parent (undo-tree-current buffer-undo-tree))
+		(and (undo-tree-node-next parent)
+		     (or (not (eq parent (undo-tree-root buffer-undo-tree)))
+			 (> (length (undo-tree-node-next parent)) 1))))
+	    (undo-tree-oldest-leaf parent)
+	  parent)))))
+
+
+
+(defun undo-tree-discard-history ()
+  "Discard undo history until we're within memory usage limits
+set by `undo-limit', `undo-strong-limit' and `undo-outer-limit'."
+
+  (when (> (undo-tree-size buffer-undo-tree) undo-limit)
+    ;; if there are no branches off root, first node to discard is root;
+    ;; otherwise it's leaf node at botom of oldest branch
+    (let ((node (if (> (length (undo-tree-node-next
+				(undo-tree-root buffer-undo-tree))) 1)
+		    (undo-tree-oldest-leaf (undo-tree-root buffer-undo-tree))
+		  (undo-tree-root buffer-undo-tree))))
+
+      ;; discard nodes until memory use is within `undo-strong-limit'
+      (while (and node
+		  (> (undo-tree-size buffer-undo-tree) undo-strong-limit))
+	(setq node (undo-tree-discard-node node)))
+
+      ;; discard nodes until next node to discard would bring memory use
+      ;; within `undo-limit'
+      (while (and node
+		  (> (- (undo-tree-size buffer-undo-tree)
+			(undo-list-byte-size (undo-tree-node-undo node))
+			(undo-list-byte-size (undo-tree-node-redo node)))
+		     undo-limit))
+	(setq node (undo-tree-discard-node node)))
+
+      ;; if we're still over the `undo-outer-limit', discard entire history
+      (when (> (undo-tree-size buffer-undo-tree) undo-outer-limit)
+	;; query first `undo-ask-before-discard' is set
+	(if undo-ask-before-discard
+	    (when (yes-or-no-p
+		   (format
+		    "Buffer `%s' undo info is %d bytes long;  discard it? "
+		    (buffer-name) (undo-tree-size buffer-undo-tree)))
+	      (setq buffer-undo-tree nil))
+	  ;; otherwise, discard and display warning
+	  (display-warning
+	   '(undo discard-info)
+	   (concat
+	    (format "Buffer `%s' undo info was %d bytes long.\n"
+		    (buffer-name) (undo-tree-size buffer-undo-tree))
+	    "The undo info was discarded because it exceeded\
+ `undo-outer-limit'.
+
+This is normal if you executed a command that made a huge change
+to the buffer. In that case, to prevent similar problems in the
+future, set `undo-outer-limit' to a value that is large enough to
+cover the maximum size of normal changes you expect a single
+command to make, but not so large that it might exceed the
+maximum memory allotted to Emacs.
+
+If you did not execute any such command, the situation is
+probably due to a bug and you should report it.
+
+You can disable the popping up of this buffer by adding the entry
+\(undo discard-info) to the user option `warning-suppress-types',
+which is defined in the `warnings' library.\n")
+	   :warning)
+	  (setq buffer-undo-tree nil)))
+      )))
 
 
 
@@ -839,17 +930,20 @@ Comparison is done with 'eq."
 (defun undo-list-transfer-to-tree ()
   ;; Transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'.
   (if (null buffer-undo-list)
-      (push 'undo-tree-canary buffer-undo-list)
+      (setq buffer-undo-list '(nil undo-tree-canary))
     (when (not (eq (cadr buffer-undo-list) 'undo-tree-canary))
       ;; create new node from first changeset in `buffer-undo-list', save old
       ;; `buffer-undo-tree' current node, and make new node the current node
       (let* ((node (make-undo-tree-node nil (undo-list-pop-changeset)))
-	     (splice (undo-tree-current buffer-undo-tree)))
+	     (splice (undo-tree-current buffer-undo-tree))
+	     (size (undo-list-byte-size (undo-tree-node-undo node))))
 	(setf (undo-tree-current buffer-undo-tree) node)
 	;; grow tree fragment backwards using `buffer-undo-list' changesets
 	(while (and buffer-undo-list
 		    (not (eq (cadr buffer-undo-list) 'undo-tree-canary)))
-	  (setq node (undo-tree-grow-backwards node (undo-list-pop-changeset))))
+	  (setq node
+		(undo-tree-grow-backwards node (undo-list-pop-changeset)))
+	  (incf size (undo-list-byte-size (undo-tree-node-undo node))))
 	;; if no undo history has been discarded from `buffer-undo-list' since
 	;; last transfer, splice new tree fragment onto end of old
 	;; `buffer-undo-tree' current node
@@ -857,22 +951,24 @@ Comparison is done with 'eq."
 	    (progn
 	      (setf (undo-tree-node-previous node) splice)
 	      (push node (undo-tree-node-next splice))
-	      (setf (undo-tree-node-branch splice) 0))
+	      (setf (undo-tree-node-branch splice) 0)
+	      (incf (undo-tree-size buffer-undo-tree) size))
 	  ;; if undo history has been discarded, replace entire
 	  ;; `buffer-undo-tree' with new tree fragment
 	  (setq node (undo-tree-grow-backwards node nil))
 	  (setf (undo-tree-root buffer-undo-tree) node)
-	  (push 'undo-tree-canary buffer-undo-list))
+	  (setq buffer-undo-list '(nil undo-tree-canary))
+	  (setf (undo-tree-size buffer-undo-tree) size))
 	))))
 
 
-(defun undo-list-size (undo-list)
+(defun undo-list-byte-size (undo-list)
   ;; Return size (in bytes) of UNDO-LIST
   (let ((size 0) (p undo-list))
     (while p
-      (setq size (+ size undo-tree-cons-byte-size))
+      (incf size 8)  ; cons cells use up 8 bytes
       (when (and (consp (car p)) (stringp (caar p)))
-	(setq size (+ size (string-bytes (caar p)))))
+	(incf size (string-bytes (caar p))))
       (setq p (cdr p)))
     size))
 
@@ -914,34 +1010,44 @@ as what it is: a tree."
   ;; throw error if undo is disabled in buffer
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
 
-  ;; if `buffer-undo-tree' is empty, create initial undo-tree
-  (when (null buffer-undo-tree)
-    (setq buffer-undo-tree (make-undo-tree)))
-  ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
-  (undo-list-transfer-to-tree)
+  (let ((undo-in-progress t))
+    ;; if `buffer-undo-tree' is empty, create initial undo-tree
+    (when (null buffer-undo-tree)
+      (setq buffer-undo-tree (make-undo-tree)))
+    ;; transfer entries accumulated in `buffer-undo-list' to
+    ;; `buffer-undo-tree'
+    (undo-list-transfer-to-tree)
 
-  (dotimes (i (or arg 1))
-    ;; check if at top of undo tree
-    (if (null (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
-	(error "No further undo information")
-      ;; undo one record from undo tree
-      (primitive-undo 1 (undo-copy-list
-			 (undo-tree-node-undo
-			  (undo-tree-current buffer-undo-tree))))
-      ;; pop redo entries that `primitive-undo' has added to
-      ;; `buffer-undo-list' and record them in current node's redo record
-      (setf (undo-tree-node-redo (undo-tree-current buffer-undo-tree))
-	    (undo-list-pop-changeset))
-      ;; rewind current node
-      (setf (undo-tree-current buffer-undo-tree)
-	    (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
-      ;; update timestamp
-      (setf (undo-tree-node-timestamp (undo-tree-current buffer-undo-tree))
-	    (current-time))
-      ))
-  ;; inform user if at branch point
-  (when (> (undo-tree-num-branches) 1)
-    (message "Undo branch point!")))
+    (dotimes (i (or arg 1))
+      ;; check if at top of undo tree
+      (if (null (undo-tree-node-previous
+		 (undo-tree-current buffer-undo-tree)))
+	  (error "No further undo information")
+	;; undo one record from undo tree
+	(primitive-undo 1 (undo-copy-list
+			   (undo-tree-node-undo
+			    (undo-tree-current buffer-undo-tree))))
+	;; pop redo entries that `primitive-undo' has added to
+	;; `buffer-undo-list' and record them in current node's redo record if
+	;; they're not already there
+	(if (undo-tree-node-redo (undo-tree-current buffer-undo-tree))
+	    (undo-list-pop-changeset)
+	  (setf (undo-tree-node-redo (undo-tree-current buffer-undo-tree))
+		(undo-list-pop-changeset))
+	  (incf (undo-tree-size buffer-undo-tree)
+		(undo-list-byte-size
+		 (undo-tree-node-redo (undo-tree-current buffer-undo-tree)))))
+	;; rewind current node
+	(setf (undo-tree-current buffer-undo-tree)
+	      (undo-tree-node-previous (undo-tree-current buffer-undo-tree)))
+	;; update timestamp
+	(setf (undo-tree-node-timestamp (undo-tree-current buffer-undo-tree))
+	      (current-time))))
+
+    ;; discard undo history if necessary
+    (undo-tree-discard-history)
+    ;; inform user if at branch point
+    (when (> (undo-tree-num-branches) 1) (message "Undo branch point!"))))
 
 
 
@@ -951,35 +1057,38 @@ as what it is: a tree."
   ;; throw error if undo is disabled in buffer
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
 
-  ;; if `buffer-undo-tree' is empty, create initial undo-tree
-  (when (null buffer-undo-tree)
-    (setq buffer-undo-tree (make-undo-tree)))
-  ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
-  (undo-list-transfer-to-tree)
+  (let ((undo-in-progress t))
+    ;; if `buffer-undo-tree' is empty, create initial undo-tree
+    (when (null buffer-undo-tree)
+      (setq buffer-undo-tree (make-undo-tree)))
+    ;; transfer entries accumulated in `buffer-undo-list' to
+    ;; `buffer-undo-tree'
+    (undo-list-transfer-to-tree)
 
-  (let ((current (undo-tree-current buffer-undo-tree)))
-    (dotimes (i (or arg 1))
-      ;; check if at bottom of undo tree
-      (if (null (undo-tree-node-next current))
-	  (error "No further redo information")
-	;; advance current node
-	(setq current
-	      (setf (undo-tree-current buffer-undo-tree)
-		    (nth (undo-tree-node-branch current)
-			 (undo-tree-node-next current))))
-	;; update timestamp
-	(setf (undo-tree-node-timestamp current) (current-time))
-	;; redo one record from undo tree
-	(primitive-undo 1 (undo-copy-list (undo-tree-node-redo current)))
-	;; discard undo entries that `primitive-undo' has added to
-	;; `buffer-undo-list' since we already know how to undo from here
-	;; (NOTE: should we instead overwrite old undo entry for safety's
-	;;        sake?)
-	(setq buffer-undo-list nil)
-	)))
-  ;; inform user if at branch point
-  (when (> (undo-tree-num-branches) 1)
-    (message "Undo branch point!")))
+    (let ((current (undo-tree-current buffer-undo-tree)))
+      (dotimes (i (or arg 1))
+	;; check if at bottom of undo tree
+	(if (null (undo-tree-node-next current))
+	    (error "No further redo information")
+	  ;; advance current node
+	  (setq current
+		(setf (undo-tree-current buffer-undo-tree)
+		      (nth (undo-tree-node-branch current)
+			   (undo-tree-node-next current))))
+	  ;; update timestamp
+	  (setf (undo-tree-node-timestamp current) (current-time))
+	  ;; redo one record from undo tree
+	  (primitive-undo 1 (undo-copy-list (undo-tree-node-redo current)))
+	  ;; discard undo entries that `primitive-undo' has added to
+	  ;; `buffer-undo-list' since we already know how to undo from here
+	  ;; (NOTE: should we instead overwrite old undo entry for safety's
+	  ;;        sake?)
+	  (setq buffer-undo-list '(nil undo-tree-canary)))))
+
+    ;; discard undo history if necessary
+    (undo-tree-discard-history)
+    ;; inform user if at branch point
+    (when (> (undo-tree-num-branches) 1) (message "Undo branch point!"))))
 
 
 
