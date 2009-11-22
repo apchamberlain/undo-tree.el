@@ -986,7 +986,7 @@ Undo-tree-mode replaces Emacs' standard undo feature with a more
 powerful yet easier to use version, that treats the undo history
 as what it is: a tree."
   nil             ; init value
-  ""              ; lighter
+  " Undo-Tree"    ; lighter
   undo-tree-map   ; keymap
   ;; if disabling `undo-tree-mode', remove "canary" from `buffer-undo-list'
   (unless undo-tree-mode (setq buffer-undo-list nil)))
