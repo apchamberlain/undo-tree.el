@@ -406,6 +406,26 @@
 ;; and it can optionally display time-stamps for each buffer state. (There's
 ;; one other tiny difference: the visualizer puts the most recent branch on
 ;; the left rather than the right.)
+;;
+;;
+;;
+;; Drawbacks
+;; =========
+;;
+;; Emacs' undo system is deeply embedded in Emacs. In particular, garbage
+;; collection treats the `buffer-undo-list' specially: references to markers
+;; in `buffer-undo-list' don't count during the mark phase, and the sweep
+;; phase removes undo entries for markers that have been garbage-collected.
+;; This behaviour is implemented in C as part of the garbage collection code,
+;; and it is difficult or impossible to emulate in Elisp.
+;;
+;; To avoid dead markers being resurrected in `undo-tree-mode', and to allow
+;; them to be garbage-collected, `undo-tree-mode' doesn't record marker
+;; adjustments. Markers are rarely explicitly created by users, so the impact
+;; of this will primarily be through its effects on other features that make
+;; use of markers. However, undoing marker adjustments is anyway buggy in
+;; standard Emacs' undo (see Emacs bug#4803), so it seems plausible that
+;; relatively little code relies heavily on correct marker restoration.
 
 
 
@@ -913,16 +933,21 @@ which is defined in the `warnings' library.\n")
 
 (defun undo-list-pop-changeset ()
   ;; Pop changeset from `buffer-undo-list'.
-  ;; discard undo boundaries at head of list
-  (while (null (car buffer-undo-list))
+  ;; discard undo boundaries and marker adjustment entries at head of list
+  (while (or (null (car buffer-undo-list))
+	     (and (consp (car buffer-undo-list))
+		  (markerp (caar buffer-undo-list))))
     (setq buffer-undo-list (cdr buffer-undo-list)))
+  ;; pop elements up to next undo boundary
   (unless (eq (car buffer-undo-list) 'undo-tree-canary)
-    ;; pop elements up to next undo boundary
     (let* ((changeset (cons (pop buffer-undo-list) nil))
            (p changeset))
       (while (car buffer-undo-list)
         (setcdr p (cons (pop buffer-undo-list) nil))
-        (setq p (cdr p)))
+	;; discard marker adjustment entries (see Commentary, above)
+	(if (and (consp (cadr p)) (markerp (car (cadr p))))
+	    (setcdr p nil)
+	  (setq p (cdr p))))
       changeset)))
 
 
