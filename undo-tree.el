@@ -12,36 +12,34 @@
 
 ;; This file is NOT part of Emacs.
 ;;
-;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-;;
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-;; MA 02110-1301, USA.
+;; GNU Emacs is free software: you can redistribute it and/or modify it under
+;; the terms of the GNU General Public License as published by the Free
+;; Software Foundation, either version 3 of the License, or (at your option)
+;; any later version.
+
+;; This program is distributed in the hope that it will be useful, but WITHOUT
+;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+;; FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+;; more details.
+
+;; You should have received a copy of the GNU General Public License along
+;; with GNU Emacs. If not, see <http://www.gnu.org/licenses/>.
 
 
 ;;; Commentary:
 ;;
-;; Emacs has a powerful undo-system. Unlike the standard undo/redo system in
+;; Emacs has a powerful undo system. Unlike the standard undo/redo system in
 ;; most software, it allows you to recover *any* past state of a buffer
-;; (whereas the standard undo/redo system loses past states as soon as you
-;; redo). However, this power comes at a price: some people find Emacs' undo
-;; confusing and difficult to use, spawning a number of packages that replace
-;; it with the less powerful but more intuitive undo/redo system.
+;; (whereas the standard undo/redo system can lose past states as soon as you
+;; redo). However, this power comes at a price: many people find Emacs' undo
+;; system confusing and difficult to use, spawning a number of packages that
+;; replace it with the less powerful but more intuitive undo/redo system.
 ;;
 ;; Both the loss of data with standard undo/redo, and the confusion of Emacs'
 ;; undo, stem from trying to treat undo history as a linear sequence of
 ;; changes. It's not. The `undo-tree-mode' provided by this package replaces
 ;; Emacs' undo system with a system that treats undo history as what it is: a
-;; branching tree of changes. This simple change allows the more intuitive
+;; branching tree of changes. This simple idea allows the more intuitive
 ;; behaviour of the standard undo/redo system to be combined with the power of
 ;; never losing any history. An added side bonus is that undo history can in
 ;; some cases be stored more efficiently, allowing more changes to accumulate
@@ -70,10 +68,12 @@
 ;;   Redo changes.
 ;;
 ;; `undo-tree-switch-branch'
-;;   Switch undo-tree branch. (What does this mean? Better press it and see!)
+;;   Switch undo-tree branch.
+;;   (What does this mean? Better press the button and see!)
 ;;
 ;; C-x u  (`undo-tree-visualize')
-;;   Visualize undo tree. (Better try this button too!)
+;;   Visualize undo tree.
+;;   (Better try pressing this button too!)
 ;;
 ;;
 ;; In the undo visualizer:
@@ -90,10 +90,10 @@
 ;; <right>  f  C-f  (`undo-tree-visualize-switch-next-branch')
 ;;   Switch to next undo-tree branch.
 ;;
-;; t
+;; t  (`undo-tree-visualizer-toggle-timestamps')
 ;;   Toggle display of time-stamps.
 ;;
-;; q  C-q
+;; q  C-q  (`undo-tree-visualizer-quit')
 ;;   Quit undo-tree-visualizer.
 ;;
 ;; ,  <
@@ -423,9 +423,10 @@
 ;; them to be garbage-collected, `undo-tree-mode' doesn't record marker
 ;; adjustments. Markers are rarely explicitly created by users, so the impact
 ;; of this will primarily be through its effects on other features that make
-;; use of markers. However, undoing marker adjustments is anyway buggy in
-;; standard Emacs' undo (see Emacs bug#4803), so it seems plausible that
-;; relatively little code relies heavily on correct marker restoration.
+;; use of markers. Since marker adjustments haven't always been restored by
+;; undo, and even then it was buggy until recently (see Emacs bug#4803), it
+;; seems likely that relatively little code relies heavily on correct marker
+;; restoration.
 
 
 
@@ -541,13 +542,13 @@ in visualizer.")
     'undo-tree-visualizer-toggle-timestamps)
   ;; horizontal scrolling may be needed if tree is very wide
   (define-key undo-tree-visualizer-map ","
-    (lambda () (interactive) "Scroll right." (scroll-right 1 t)))
+    (lambda () (interactive) "Scroll left." (scroll-right 1 t)))
   (define-key undo-tree-visualizer-map "."
-    (lambda () (interactive) "Scroll left." (scroll-left 1 t)))
+    (lambda () (interactive) "Scroll right." (scroll-left 1 t)))
   (define-key undo-tree-visualizer-map "<"
-    (lambda () (interactive) "Scroll right." (scroll-right 1 t)))
+    (lambda () (interactive) "Scroll left." (scroll-right 1 t)))
   (define-key undo-tree-visualizer-map ">"
-    (lambda () (interactive) "Scroll left." (scroll-left 1 t)))
+    (lambda () (interactive) "Scroll right." (scroll-left 1 t)))
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
