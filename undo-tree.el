@@ -50,6 +50,25 @@
 ;; best ideas from their competitors!
 ;;
 ;;
+;; Installation
+;; ============
+;;
+;; To install `undo-tree-mode', make sure this file is saved in a directory in
+;; your `load-path', and add the line:
+;;
+;;   (require 'undo-tree)
+;;
+;; to your .emacs file.
+;;
+;; If you want to replace the standard Emacs' undo system with the
+;; `undo-tree-mode' system in all buffers, you can enable it globally by
+;; adding:
+;;
+;;   (global-undo-tree-mode)
+;;
+;; to your .emacs file.
+;;
+;;
 ;; Quick-Start
 ;; ===========
 ;;
@@ -72,7 +91,7 @@
 ;;   (What does this mean? Better press the button and see!)
 ;;
 ;; C-x u  (`undo-tree-visualize')
-;;   Visualize undo tree.
+;;   Visualize the undo tree.
 ;;   (Better try pressing this button too!)
 ;;
 ;;
@@ -427,6 +446,10 @@
 ;; undo, and even then it was buggy until recently (see Emacs bug#4803), it
 ;; seems likely that relatively little code relies heavily on correct marker
 ;; restoration.
+;;
+;; `undo-tree-mode' doesn't support "undo in region", i.e. selectively undoing
+;; only the changes that affect the current region in
+;; `transient-mark-mode'). Support for this is planned for a future version.
 
 
 
@@ -542,13 +565,13 @@ in visualizer.")
     'undo-tree-visualizer-toggle-timestamps)
   ;; horizontal scrolling may be needed if tree is very wide
   (define-key undo-tree-visualizer-map ","
-    (lambda () (interactive) "Scroll left." (scroll-right 1 t)))
+    'undo-tree-visualizer-scroll-left)
   (define-key undo-tree-visualizer-map "."
-    (lambda () (interactive) "Scroll right." (scroll-left 1 t)))
+    'undo-tree-visualizer-scroll-right)
   (define-key undo-tree-visualizer-map "<"
-    (lambda () (interactive) "Scroll left." (scroll-right 1 t)))
+    'undo-tree-visualizer-scroll-left)
   (define-key undo-tree-visualizer-map ">"
-    (lambda () (interactive) "Scroll right." (scroll-left 1 t)))
+    'undo-tree-visualizer-scroll-right)
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
@@ -1010,7 +1033,16 @@ A negative prefix argument turns it off.
 
 Undo-tree-mode replaces Emacs' standard undo feature with a more
 powerful yet easier to use version, that treats the undo history
-as what it is: a tree."
+as what it is: a tree.
+
+The following keys are available in `undo-tree-mode':
+
+  \\{undo-tree-map}
+
+Within the undo-tree visualizer, the following keys are available:
+
+  \\{undo-tree-visualizer-map}"
+
   nil             ; init value
   " Undo-Tree"    ; lighter
   undo-tree-map   ; keymap
@@ -1592,6 +1624,16 @@ at POS."
   (setq buffer-read-only nil)
   (undo-tree-draw-tree buffer-undo-tree)
   (setq buffer-read-only t))
+
+
+(defun undo-tree-visualizer-scroll-left (&optional arg)
+  (interactive "p")
+  (scroll-right (or arg 1) t))
+
+
+(defun undo-tree-visualizer-scroll-right (&optional arg)
+  (interactive "p")
+  (scroll-left (or arg 1) t))
 
 
 
