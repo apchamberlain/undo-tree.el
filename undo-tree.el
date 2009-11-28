@@ -513,6 +513,7 @@ in visualizer.")
 
 
 
+
 ;;; =================================================================
 ;;;                     Setup default keymaps
 
@@ -684,6 +685,7 @@ in visualizer.")
        (setf (undo-tree-node-visualizer ,node)
              (setq v (make-undo-tree-visualizer-data))))
      (setf (undo-tree-visualizer-data-marker v) ,val)))
+
 
 
 
@@ -952,6 +954,7 @@ which is defined in the `warnings' library.\n")
 
 
 
+
 ;;; =====================================================================
 ;;;         Utility functions for handling `buffer-undo-list'
 
@@ -1022,6 +1025,7 @@ which is defined in the `warnings' library.\n")
 
 
 
+
 ;;; =====================================================================
 ;;;                        Undo-tree commands
 
@@ -1048,7 +1052,6 @@ Within the undo-tree visualizer, the following keys are available:
   undo-tree-map   ; keymap
   ;; if disabling `undo-tree-mode', remove "canary" from `buffer-undo-list'
   (unless undo-tree-mode (setq buffer-undo-list nil)))
-
 
 
 (defun turn-on-undo-tree-mode ()
@@ -1226,6 +1229,8 @@ using `undo-tree-redo'."
     (setq buffer-undo-tree (make-undo-tree)))
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
   (undo-list-transfer-to-tree)
+  ;; add hook to kill visualizer buffer if original buffer is changed
+  (add-hook 'before-change-functions 'undo-tree-kill-visualizer nil t)
   ;; prepare *undo-tree* buffer, then draw tree in it
   (let ((undo-tree buffer-undo-tree)
         (buff (current-buffer)))
@@ -1237,6 +1242,17 @@ using `undo-tree-redo'."
     (setq buffer-read-only nil)
     (undo-tree-draw-tree undo-tree)
     (setq buffer-read-only t)))
+
+
+(defun undo-tree-kill-visualizer (&rest dummy)
+  ;; Kill visualizer. Added to `before-change-functions' hook of original
+  ;; buffer when visualizer is invoked.
+  (unwind-protect
+      (save-excursion
+	(set-buffer " *undo-tree*")
+	(undo-tree-visualizer-quit))
+    ;; remove hook now that visualizer has been killed
+    (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t)))
 
 
 
@@ -1276,7 +1292,6 @@ using `undo-tree-redo'."
     (undo-tree-draw-node (undo-tree-current undo-tree) 'current)))
 
 
-
 (defun undo-tree-highlight-active-branch (node)
   ;; Draw highlighted active branch below NODE in current buffer.
   (let ((stack (list node)))
@@ -1291,7 +1306,6 @@ using `undo-tree-redo'."
       (goto-char (undo-tree-node-marker node))
       (setq node (undo-tree-draw-subtree node 'active))
       (setq stack (append stack node)))))
-
 
 
 (defun undo-tree-draw-node (node &optional current)
@@ -1310,7 +1324,6 @@ using `undo-tree-redo'."
     (if current (undo-tree-insert ?x) (undo-tree-insert ?o))
     (backward-char 1)
     (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
-
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
@@ -1504,6 +1517,7 @@ using `undo-tree-redo'."
   ;; Convert TIMESTAMP to hh:mm:ss string.
   (let ((time (decode-time timestamp)))
     (format "%02d:%02d:%02d" (nth 2 time) (nth 1 time) (nth 0 time))))
+
 
 
 
