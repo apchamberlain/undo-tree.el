@@ -9,7 +9,6 @@
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 
-
 ;; This file is NOT part of Emacs.
 ;;
 ;; GNU Emacs is free software: you can redistribute it and/or modify it under
@@ -53,12 +52,16 @@
 ;; Installation
 ;; ============
 ;;
+;; This package has only been tested with Emacs versions 22, 23 and CVS. It
+;; will not work without modifications in earlier versions of Emacs.
+;;
 ;; To install `undo-tree-mode', make sure this file is saved in a directory in
 ;; your `load-path', and add the line:
 ;;
 ;;   (require 'undo-tree)
 ;;
-;; to your .emacs file.
+;; to your .emacs file. Byte-compiling undo-tree.el is recommended (e.g. using
+;; "M-x byte-compile-file" from within emacs).
 ;;
 ;; If you want to replace the standard Emacs' undo system with the
 ;; `undo-tree-mode' system in all buffers, you can enable it globally by
@@ -481,6 +484,11 @@
 
 (eval-when-compile (require 'cl))
 
+;; `characterp' isn't defined in Emacs versions <= 22
+(eval-and-compile
+  (unless (fboundp 'characterp)
+    (defmacro characterp (arg) `(char-valid-p ,arg))))
+
 
 ;;; =====================================================================
 ;;;              Global variables and customization options
@@ -518,7 +526,10 @@ in visualizer."
   :group 'undo-tree)
 
 (defface undo-tree-visualizer-active-branch-face
-  '((((class color)) :foreground "white" :weight bold))
+  '((((class color) (background dark))
+     (:foreground "white" :weight bold))
+    (((class color) (background light))
+     (:foreground "black" :weight bold)))
   "*Face used to highlight active undo-tree branch
 in visualizer."
   :group 'undo-tree)
