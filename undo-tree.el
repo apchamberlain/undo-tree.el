@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 
@@ -103,10 +103,10 @@
 ;; <down>  n  C-n  (`undo-tree-visualize-undo')
 ;;   Undo changes.
 ;;
-;; <left>  b  C-b  (`undo-tree-visualize-switch-previous-branch')
+;; <left>  b  C-b  (`undo-tree-visualize-switch-branch-left')
 ;;   Switch to previous undo-tree branch.
 ;;
-;; <right>  f  C-f  (`undo-tree-visualize-switch-next-branch')
+;; <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
 ;;   Switch to next undo-tree branch.
 ;;
 ;; t  (`undo-tree-visualizer-toggle-timestamps')
@@ -455,6 +455,13 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.1.2
+;; * fixed keybindings
+;; * renamed `undo-tree-visualizer-switch-previous-branch' and
+;;   `undo-tree-visualizer-switch-next-branch' to
+;;   `undo-tree-visualizer-switch-branch-left' and
+;;   `undo-tree-visualizer-switch-branch-right'
+;;
 ;; Version 0.1.1
 ;; * prevented `undo-tree-kill-visualizer' from killing visualizer when
 ;;   undoing/redoing from the visualizer, which completely broke the
@@ -539,15 +546,15 @@ in visualizer."
   ;; remap `undo' to `undo-tree-undo'
   (define-key undo-tree-map [remap undo] 'undo-tree-undo)
   ;; bind standard undo bindings (since these match redo counterparts)
-  (define-key undo-tree-map "C-/" 'undo-tree-undo)
-  (define-key undo-tree-map "C-_" 'undo-tree-undo)
+  (define-key undo-tree-map (kbd "C-/") 'undo-tree-undo)
+  (define-key undo-tree-map "\C-_" 'undo-tree-undo)
   ;; redo doesn't exist normally, so define out own keybindings
   (define-key undo-tree-map (kbd "C-?") 'undo-tree-redo)
   (define-key undo-tree-map (kbd "M-_") 'undo-tree-redo)
   ;; just in case something has defined it...
   (define-key undo-tree-map [remap redo] 'undo-tree-redo)
   ;; we use "C-x u" for the undo-tree visualizer
-  (define-key undo-tree-map (kbd "C-x u") 'undo-tree-visualize))
+  (define-key undo-tree-map (kbd "\C-x u") 'undo-tree-visualize))
 
 
 (unless undo-tree-visualizer-map
@@ -567,17 +574,17 @@ in visualizer."
     'undo-tree-visualize-redo)
   ;; horizontal motion keys switch branch
   (define-key undo-tree-visualizer-map [right]
-    'undo-tree-visualize-switch-next-branch)
+    'undo-tree-visualize-switch-branch-right)
   (define-key undo-tree-visualizer-map "f"
-    'undo-tree-visualize-switch-next-branch)
+    'undo-tree-visualize-switch-branch-right)
   (define-key undo-tree-visualizer-map "\C-f"
-    'undo-tree-visualize-undo)
+    'undo-tree-visualize-switch-branch-right)
   (define-key undo-tree-visualizer-map [left]
-    'undo-tree-visualize-switch-previous-branch)
+    'undo-tree-visualize-switch-branch-left)
   (define-key undo-tree-visualizer-map "b"
-    'undo-tree-visualize-switch-previous-branch)
+    'undo-tree-visualize-switch-branch-left)
   (define-key undo-tree-visualizer-map "\C-b"
-    'undo-tree-visualize-switch-previous-branch)
+    'undo-tree-visualize-switch-branch-left)
   ;; mouse sets buffer state to node at click
   (define-key undo-tree-visualizer-map [mouse-1]
     'undo-tree-visualizer-set)
@@ -1600,7 +1607,7 @@ Within the undo-tree visualizer, the following keys are available:
     (setq buffer-read-only t)))
 
 
-(defun undo-tree-visualize-switch-next-branch (arg)
+(defun undo-tree-visualize-switch-branch-right (arg)
   "Switch to next branch of the undo tree.
 This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
@@ -1628,12 +1635,12 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (setq buffer-read-only t)))
 
 
-(defun undo-tree-visualize-switch-previous-branch (arg)
+(defun undo-tree-visualize-switch-branch-left (arg)
   "Switch to previous branch of the undo tree.
 This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive "p")
-  (undo-tree-visualize-switch-next-branch (- arg)))
+  (undo-tree-visualize-switch-branch-right (- arg)))
 
 
 (defun undo-tree-visualizer-quit ()
