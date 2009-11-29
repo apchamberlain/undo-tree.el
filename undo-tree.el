@@ -469,7 +469,11 @@
 ;; * initial release
 
 
+
 ;;; Code:
+
+(eval-when-compile (require 'cl))
+
 
 ;;; =====================================================================
 ;;;              Global variables and customization options
