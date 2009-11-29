@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1
+;; Version: 0.1.1
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 
@@ -83,7 +83,7 @@
 ;; C-_  C-/  (`undo-tree-undo')
 ;;   Undo changes.
 ;;
-;; C-+  C-?  (`undo-tree-redo')
+;; M-_  C-?  (`undo-tree-redo')
 ;;   Redo changes.
 ;;
 ;; `undo-tree-switch-branch'
@@ -455,6 +455,16 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.1.1
+;; * prevented `undo-tree-kill-visualizer' from killing visualizer when
+;;   undoing/redoing from the visualizer, which completely broke the
+;;   visualizer!
+;; * changed one redo binding, so that at least one set of undo/redo bindings
+;;   works in a terminal
+;; * bound vertical scrolling commands in `undo-tree-visualizer-map', in case
+;;   they aren't bound globally
+;; * added missing :group argument to `defface's
+;;
 ;; Version 0.1
 ;; * initial release
 
@@ -487,17 +497,20 @@ Must be a postivie odd integer."
 
 (defface undo-tree-visualizer-default-face
   '((((class color)) :foreground "gray"))
-  "*Face used to draw undo-tree in visualizer.")
+  "*Face used to draw undo-tree in visualizer."
+  :group 'undo-tree)
 
 (defface undo-tree-visualizer-current-face
   '((((class color)) :foreground "red"))
   "*Face used to highlight current undo-tree node
-in visualizer.")
+in visualizer."
+  :group 'undo-tree)
 
 (defface undo-tree-visualizer-active-branch-face
   '((((class color)) :foreground "white" :weight bold))
   "*Face used to highlight active undo-tree branch
-in visualizer.")
+in visualizer."
+  :group 'undo-tree)
 
 (defvar undo-tree-visualizer-map nil
   "Keymap used in undo-tree visualizer.")
@@ -521,9 +534,12 @@ in visualizer.")
   (setq undo-tree-map (make-sparse-keymap))
   ;; remap `undo' to `undo-tree-undo'
   (define-key undo-tree-map [remap undo] 'undo-tree-undo)
+  ;; bind standard undo bindings (since these match redo counterparts)
+  (define-key undo-tree-map "C-/" 'undo-tree-undo)
+  (define-key undo-tree-map "C-_" 'undo-tree-undo)
   ;; redo doesn't exist normally, so define out own keybindings
   (define-key undo-tree-map (kbd "C-?") 'undo-tree-redo)
-  (define-key undo-tree-map (kbd "C-+") 'undo-tree-redo)
+  (define-key undo-tree-map (kbd "M-_") 'undo-tree-redo)
   ;; just in case something has defined it...
   (define-key undo-tree-map [remap redo] 'undo-tree-redo)
   ;; we use "C-x u" for the undo-tree visualizer
@@ -573,6 +589,9 @@ in visualizer.")
     'undo-tree-visualizer-scroll-left)
   (define-key undo-tree-visualizer-map ">"
     'undo-tree-visualizer-scroll-right)
+  ;; vertical scrolling may be needed if the tree is very tall
+  (define-key undo-tree-visualizer-map [next] 'scroll-up)
+  (define-key undo-tree-visualizer-map [prior] 'scroll-down)
   ;; quit visualizer
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
@@ -1247,12 +1266,13 @@ using `undo-tree-redo'."
 (defun undo-tree-kill-visualizer (&rest dummy)
   ;; Kill visualizer. Added to `before-change-functions' hook of original
   ;; buffer when visualizer is invoked.
-  (unwind-protect
-      (save-excursion
-	(set-buffer " *undo-tree*")
-	(undo-tree-visualizer-quit))
-    ;; remove hook now that visualizer has been killed
-    (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t)))
+  (unless undo-in-progress
+    (unwind-protect
+	(save-excursion
+	  (set-buffer " *undo-tree*")
+	  (undo-tree-visualizer-quit))
+      ;; remove hook now that visualizer has been killed
+      (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))))
 
 
 
@@ -1525,13 +1545,24 @@ using `undo-tree-redo'."
 ;;;                    Visualizer mode commands
 
 (defun undo-tree-visualizer-mode ()
-  "Major mode used in undo-tree visualizer."
+  "Major mode used in undo-tree visualizer.
+
+The undo-tree visualizer can only be invoked from a buffer in
+which `undo-tree-mode' is enabled. The visualizer displays the
+undo history tree graphically, and allows you to browse around
+the undo history, undoing or redoing the corresponding changes in
+the parent buffer.
+
+Within the undo-tree visualizer, the following keys are available:
+
+  \\{undo-tree-visualizer-map}"
   (kill-all-local-variables)
   (setq major-mode 'undo-tree-visualizer-mode)
   (setq mode-name "undo-tree-visualizer-mode")
   (use-local-map undo-tree-visualizer-map)
   (setq truncate-lines t)
   (setq buffer-read-only t))
+
 
 
 (defun undo-tree-visualize-undo (&optional arg)
