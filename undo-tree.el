@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 
@@ -457,6 +457,10 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.1.3
+;; * fixed `undo-tree-visualizer-quit' to remove `after-change-functions'
+;;   hook there, rather than in `undo-tree-kill-visualizer'
 ;;
 ;; Version 0.1.2
 ;; * fixed keybindings
@@ -1292,9 +1296,7 @@ using `undo-tree-redo'."
     (unwind-protect
 	(save-excursion
 	  (set-buffer " *undo-tree*")
-	  (undo-tree-visualizer-quit))
-      ;; remove hook now that visualizer has been killed
-      (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))))
+	  (undo-tree-visualizer-quit)))))
 
 
 
@@ -1658,6 +1660,10 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   "Quit the undo-tree visualizer."
   (interactive)
   (undo-tree-clear-visualizer-data buffer-undo-tree)
+  ;; remove kill visualizer hook from parent buffer
+  (save-excursion
+    (set-buffer undo-tree-visualizer-buffer)
+    (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
   (kill-buffer-and-window))
 
 
