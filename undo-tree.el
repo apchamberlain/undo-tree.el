@@ -1315,8 +1315,7 @@ using `undo-tree-redo'."
   ;; buffer when visualizer is invoked.
   (unless undo-in-progress
     (unwind-protect
-	(save-excursion
-	  (set-buffer " *undo-tree*")
+	(with-current-buffer " *undo-tree*"
 	  (undo-tree-visualizer-quit)))))
 
 
@@ -1682,8 +1681,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive)
   (undo-tree-clear-visualizer-data buffer-undo-tree)
   ;; remove kill visualizer hook from parent buffer
-  (save-excursion
-    (set-buffer undo-tree-visualizer-buffer)
+  (with-current-buffer undo-tree-visualizer-buffer
     (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
   (kill-buffer-and-window))
 
