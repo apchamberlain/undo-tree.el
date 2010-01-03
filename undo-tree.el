@@ -2,10 +2,10 @@
 ;;; undo-tree.el --- Treat undo history as a tree
 
 
-;; Copyright (C) 2009 Toby Cubitt
+;; Copyright (C) 2009-2010 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1.4
+;; Version: 0.1.5
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 
@@ -461,6 +461,13 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.1.5
+;; * modified `undo-tree-visualize' to mark the visualizer window as
+;;   soft-dedicated and changed `undo-tree-visualizer-quit' to use
+;;   `kill-buffer', so that visualizer window is deleted along with buffer if
+;;   visualizer buffer was displayed in a new window, but not if it was
+;;   displayed in an existing window.
 ;;
 ;; Version 0.1.4
 ;; * modified `undo-tree-undo' and `undo-tree-redo' to always replace
@@ -1299,7 +1306,8 @@ using `undo-tree-redo'."
   (add-hook 'before-change-functions 'undo-tree-kill-visualizer nil t)
   ;; prepare *undo-tree* buffer, then draw tree in it
   (let ((undo-tree buffer-undo-tree)
-        (buff (current-buffer)))
+        (buff (current-buffer))
+	(display-buffer-mark-dedicated 'soft))
     (switch-to-buffer-other-window " *undo-tree*")
     (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-buffer buff)
@@ -1683,7 +1691,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   ;; remove kill visualizer hook from parent buffer
   (with-current-buffer undo-tree-visualizer-buffer
     (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
-  (kill-buffer-and-window))
+  (kill-buffer))
 
 
 (defun undo-tree-visualizer-set (pos)
