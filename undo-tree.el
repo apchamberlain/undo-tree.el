@@ -8,6 +8,7 @@
 ;; Version: 0.1.5
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
+;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
 
 ;; This file is NOT part of Emacs.
 ;;
