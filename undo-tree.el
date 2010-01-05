@@ -467,6 +467,9 @@
 ;; * added `undo-tree-mode-lighter' customization option to allow the
 ;;   mode-line lighter to be changed
 ;; * bug-fix in `undo-tree-discard-node'
+;; * added `undo-tree-save-state-to-register' and
+;;   `undo-tree-restore-state-from-register' commands and keybindings for
+;;   saving/restoring buffer states using registers
 ;;
 ;; Version 0.1.5
 ;; * modified `undo-tree-visualize' to mark the visualizer window as
@@ -592,13 +595,18 @@ in visualizer."
   ;; bind standard undo bindings (since these match redo counterparts)
   (define-key undo-tree-map (kbd "C-/") 'undo-tree-undo)
   (define-key undo-tree-map "\C-_" 'undo-tree-undo)
-  ;; redo doesn't exist normally, so define out own keybindings
+  ;; redo doesn't exist normally, so define our own keybindings
   (define-key undo-tree-map (kbd "C-?") 'undo-tree-redo)
   (define-key undo-tree-map (kbd "M-_") 'undo-tree-redo)
-  ;; just in case something has defined it...
+  ;; just in case something has defined `redo'...
   (define-key undo-tree-map [remap redo] 'undo-tree-redo)
   ;; we use "C-x u" for the undo-tree visualizer
-  (define-key undo-tree-map (kbd "\C-x u") 'undo-tree-visualize))
+  (define-key undo-tree-map (kbd "\C-x u") 'undo-tree-visualize)
+  ;; bind register commands
+  (define-key undo-tree-map (kbd "C-x r u")
+    'undo-tree-save-state-to-register)
+  (define-key undo-tree-map (kbd "C-x r U")
+    'undo-tree-restore-state-from-register))
 
 
 (unless undo-tree-visualizer-map
@@ -1298,6 +1306,47 @@ using `undo-tree-redo'."
     (while (not (eq (undo-tree-current buffer-undo-tree) node))
       (undo-tree-redo))
     n))  ; return intersection node
+
+
+
+(defun undo-tree-save-state-to-register (register)
+  "Store current undo-tree state to REGISTER.
+The saved state can be restored using
+`undo-tree-restore-state-from-register'.
+Argument is a character, naming the register."
+  (interactive "cUndo-tree state to register: ")
+  ;; throw error if undo is disabled in buffer
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
+  ;; if `buffer-undo-tree' is empty, create initial undo-tree
+  (when (null buffer-undo-tree)
+    (setq buffer-undo-tree (make-undo-tree)))
+  ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
+  (undo-list-transfer-to-tree)
+  ;; save current node to REGISTER
+  (set-register register (undo-tree-current buffer-undo-tree)))
+
+
+
+(defun undo-tree-restore-state-from-register (register)
+  "Restore undo-tree state from REGISTER.
+The state must be saved using `undo-tree-save-state-to-register'.
+Argument is a character, naming the register."
+  (interactive "cRestore undo-tree state from register: ")
+  ;; throw error if undo is disabled in buffer, or if register doesn't contain
+  ;; an undo-tree node
+  (let ((node (get-register register)))
+    (cond
+     ((eq buffer-undo-list t)
+      (error "No undo information in this buffer"))
+     ((not (undo-tree-node-p node))
+      (error "Register doesn't contain undo-tree state")))
+    ;; if `buffer-undo-tree' is empty, create initial undo-tree
+    (when (null buffer-undo-tree)
+      (setq buffer-undo-tree (make-undo-tree)))
+    ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
+    (undo-list-transfer-to-tree)
+    ;; restore buffer state corresponding to saved node
+    (undo-tree-set node)))
 
 
 
