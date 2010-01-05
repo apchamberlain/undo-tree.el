@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009-2010 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1.5
+;; Version: 0.1.6
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -463,6 +463,10 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.1.6
+;; * added `undo-tree-mode-lighter' customization option to allow the
+;;   mode-line lighter to be changed
+;;
 ;; Version 0.1.5
 ;; * modified `undo-tree-visualize' to mark the visualizer window as
 ;;   soft-dedicated and changed `undo-tree-visualizer-quit' to use
@@ -522,6 +526,12 @@
 (defgroup undo-tree nil
   "Tree undo/redo."
   :group 'undo)
+
+(defcustom undo-tree-mode-lighter " Undo-Tree"
+  "Lighter displayed in mode line
+when `undo-tree-mode' is enabled."
+  :group 'undo-tree
+  :type 'string)
 
 (defcustom undo-tree-visualizer-spacing 3
   "Horizontal spacing in undo-tree visualization.
@@ -1119,9 +1129,9 @@ Within the undo-tree visualizer, the following keys are available:
 
   \\{undo-tree-visualizer-map}"
 
-  nil             ; init value
-  " Undo-Tree"    ; lighter
-  undo-tree-map   ; keymap
+  nil                       ; init value
+  undo-tree-mode-lighter    ; lighter
+  undo-tree-map             ; keymap
   ;; if disabling `undo-tree-mode', remove "canary" from `buffer-undo-list'
   (unless undo-tree-mode (setq buffer-undo-list nil)))
 
