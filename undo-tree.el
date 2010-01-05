@@ -466,6 +466,7 @@
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
 ;;   mode-line lighter to be changed
+;; * bug-fix in `undo-tree-discard-node'
 ;;
 ;; Version 0.1.5
 ;; * modified `undo-tree-visualize' to mark the visualizer window as
@@ -929,7 +930,7 @@ Comparison is done with 'eq."
           (+ (undo-list-byte-size (undo-tree-node-undo node))
              (undo-list-byte-size (undo-tree-node-redo node))))
 
-    ;; discarding root node
+    ;; discarding root node...
     (if (eq node (undo-tree-root buffer-undo-tree))
         (cond
          ;; should always discard branches before root
@@ -938,7 +939,8 @@ Comparison is done with 'eq."
  has multiple branches"))
          ;; don't discard root if current node is only child
          ((eq (car (undo-tree-node-next node))
-              (undo-tree-current buffer-undo-tree)))
+              (undo-tree-current buffer-undo-tree))
+	  nil)
          (t
           ;; make child of root into new root
           (setf node (setf (undo-tree-root buffer-undo-tree)
@@ -953,7 +955,7 @@ Comparison is done with 'eq."
               (undo-tree-oldest-leaf node)
             node)))
 
-      ;; discarding leaf node
+      ;; discarding leaf node...
       (let* ((parent (undo-tree-node-previous node))
              (current (nth (undo-tree-node-branch parent)
                            (undo-tree-node-next parent))))
