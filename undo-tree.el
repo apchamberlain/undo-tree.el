@@ -98,8 +98,14 @@
 ;;   Visualize the undo tree.
 ;;   (Better try pressing this button too!)
 ;;
+;; C-x r u  (`undo-tree-save-state-to-register')
+;;   Save current buffer state to register.
 ;;
-;; In the undo visualizer:
+;; C-x r U  (`undo-tree-restore-state-from-register')
+;;   Restore buffer state from register.
+;;
+;;
+;; In the undo-tree visualizer:
 ;;
 ;; <up>  p  C-p  (`undo-tree-visualize-undo')
 ;;   Undo changes.
@@ -434,6 +440,27 @@
 ;; state. (There's one other tiny difference: the visualizer puts the most
 ;; recent branch on the left rather than the right.)
 ;;
+;; In the visualizer, the usual keys for moving up and down a buffer instead
+;; move up and down the undo history tree (e.g. the up and down arrow keys, or
+;; "C-n" and "C-p"). The state of the "parent" buffer (the buffer whose undo
+;; history you are visualizing) is updated as you move around the undo tree in
+;; the visualizer. If you reach a branch point in the visualizer, the usual
+;; keys for moving forward and backward in a buffer instead switch which
+;; branch to follow (e.g. the left and right arrow keys, or "C-f" and "C-b").
+;; Clicking with the mouse on any node in the visualizer will take you
+;; directly to that node, resetting the state of the parent buffer to the
+;; state represented by that node.
+;;
+;; It can be useful to see how long ago the parent buffer was in the state
+;; represented by a particular node in the visualizer. Hitting "t" in the
+;; visualizer toggles the display of time-stamps for all the nodes. (Note
+;; that, because of the way `undo-tree-mode' works, these time-stamps may be
+;; somewhat later than the true times, especially if it's been a long time
+;; since you last undid any changes.)
+;;
+;; Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
+;; whatever state you were last on.
+;;
 ;;
 ;;
 ;; Drawbacks
@@ -456,8 +483,8 @@
 ;; restoration.
 ;;
 ;; `undo-tree-mode' doesn't support "undo in region", i.e. selectively undoing
-;; only the changes that affect the current region in
-;; `transient-mark-mode'). Support for this is planned for a future version.
+;; only the changes that affect the region. Support for this is planned for a
+;; future version.
 
 
 
