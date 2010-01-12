@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009-2010 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.1.6
+;; Version: 0.1.7
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -1780,7 +1780,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   ;; remove kill visualizer hook from parent buffer
   (with-current-buffer undo-tree-visualizer-buffer
     (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
-  (kill-buffer))
+  (kill-buffer nil))
 
 
 (defun undo-tree-visualizer-set (pos)
