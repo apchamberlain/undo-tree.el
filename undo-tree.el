@@ -489,10 +489,12 @@
 
 
 ;;; Change Log:
-;;
 ;; Version 0.1.7
 ;; * pass null argument to `kill-buffer' call in `undo-tree-visualizer-quit',
 ;;   since the argument's not optional in earlier Emacs versions
+;; * added match for "No further redo information" to
+;;   `debug-ignored-errors' to prevent debugger being called on this
+;;   error
 ;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
@@ -611,6 +613,10 @@ in visualizer."
 (defvar undo-tree-visualizer-timestamps nil
   "Non-nil when visualizer is displaying time-stamps.")
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
+
+
+;; prevent debugger being caled on "No further redo information"
+(add-to-list 'debug-ignored-errors "^No further redo information")
 
 
 
