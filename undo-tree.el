@@ -490,6 +490,10 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.1.7
+;; * pass null argument to `kill-buffer' call in `undo-tree-visualizer-quit',
+;;   since the argument's not optional in earlier Emacs versions
+;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
 ;;   mode-line lighter to be changed
