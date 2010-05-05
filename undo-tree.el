@@ -495,6 +495,9 @@
 ;; * added match for "No further redo information" to
 ;;   `debug-ignored-errors' to prevent debugger being called on this
 ;;   error
+;; * made `undo-tree-visualizer-quit' select the window displaying the
+;;   visualizer's parent buffer, or switch to the parent buffer if no window
+;;   is displaying it
 ;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
@@ -1788,9 +1791,15 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive)
   (undo-tree-clear-visualizer-data buffer-undo-tree)
   ;; remove kill visualizer hook from parent buffer
-  (with-current-buffer undo-tree-visualizer-buffer
-    (remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
-  (kill-buffer nil))
+  (unwind-protect
+      (with-current-buffer undo-tree-visualizer-buffer
+	(remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
+    (let ((parent undo-tree-visualizer-buffer)
+	  window)
+      (kill-buffer nil)
+      (if (setq window (get-buffer-window parent))
+	  (select-window window)
+	(switch-to-buffer parent)))))
 
 
 (defun undo-tree-visualizer-set (pos)
