@@ -498,6 +498,7 @@
 ;; * made `undo-tree-visualizer-quit' select the window displaying the
 ;;   visualizer's parent buffer, or switch to the parent buffer if no window
 ;;   is displaying it
+;; * fixed bug in `undo-tree-switch-branch'
 ;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
@@ -550,9 +551,8 @@
 (eval-when-compile (require 'cl))
 
 ;; `characterp' isn't defined in Emacs versions <= 22
-(eval-and-compile
-  (unless (fboundp 'characterp)
-    (defmacro characterp (arg) `(char-valid-p ,arg))))
+(unless (fboundp 'characterp)
+  (defalias 'characterp 'char-valid-p))
 
 
 ;;; =====================================================================
@@ -1306,17 +1306,17 @@ using `undo-tree-redo'."
   ;; sanity check branch number
   (when (<= (undo-tree-num-branches) 1) (error "Not at undo branch point"))
   (when (or (< branch 0) (> branch (1- (undo-tree-num-branches))))
-    (error "Invalid branch number")
+    (error "Invalid branch number"))
 
-    ;; if `buffer-undo-tree' is empty, create initial undo-tree
-    (when (null buffer-undo-tree)
-      (setq buffer-undo-tree (make-undo-tree)))
-    ;; transfer entries accumulated in `buffer-undo-list' to
-    ;; `buffer-undo-tree'
-    (undo-list-transfer-to-tree)
-    ;; switch branch
-    (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
-          branch)))
+  ;; if `buffer-undo-tree' is empty, create initial undo-tree
+  (when (null buffer-undo-tree)
+    (setq buffer-undo-tree (make-undo-tree)))
+  ;; transfer entries accumulated in `buffer-undo-list' to
+  ;; `buffer-undo-tree'
+  (undo-list-transfer-to-tree)
+  ;; switch branch
+  (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
+	branch))
 
 
 (defun undo-tree-set (node)
