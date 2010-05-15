@@ -480,6 +480,7 @@
 ;; * modified `undo-tree-node' defstruct and macros to allow arbitrary
 ;;   meta-data to be stored in a plist associated with a node, and
 ;;   reimplemented storage of visualizer data on top of this
+;; * display registers storing undo-tree state in visualizer
 ;;
 ;; Version 0.2
 ;; * added support for marker undo entries
@@ -590,8 +591,7 @@ Must be a postivie odd integer."
 
 (defface undo-tree-visualizer-current-face
   '((((class color)) :foreground "red"))
-  "*Face used to highlight current undo-tree node
-in visualizer."
+  "*Face used to highlight current undo-tree node in visualizer."
   :group 'undo-tree)
 
 (defface undo-tree-visualizer-active-branch-face
@@ -600,6 +600,12 @@ in visualizer."
     (((class color) (background light))
      (:foreground "black" :weight bold)))
   "*Face used to highlight active undo-tree branch
+in visualizer."
+  :group 'undo-tree)
+
+(defface undo-tree-visualizer-register-face
+  '((((class color)) :foreground "yellow"))
+  "*Face used to highlight undo-tree nodes saved to a register
 in visualizer."
   :group 'undo-tree)
 
@@ -828,6 +834,15 @@ in visualizer."
 	     (plist-put (undo-tree-node-meta-data ,node) :visualizer
 			(setq v (make-undo-tree-visualizer-data)))))
      (setf (undo-tree-visualizer-data-marker v) ,val)))
+
+
+
+(defmacro undo-tree-node-register (node)
+  `(plist-get (undo-tree-node-meta-data ,node) :register))
+
+(defsetf undo-tree-node-register (node) (val)
+  `(setf (undo-tree-node-meta-data ,node)
+	 (plist-put (undo-tree-node-meta-data ,node) :register ,val)))
 
 
 
@@ -1495,7 +1510,10 @@ Argument is a character, naming the register."
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
   (undo-list-transfer-to-tree)
   ;; save current node to REGISTER
-  (set-register register (undo-tree-current buffer-undo-tree)))
+  (set-register register (undo-tree-current buffer-undo-tree))
+  ;; record REGISTER in current node, for visualizer
+  (setf (undo-tree-node-register (undo-tree-current buffer-undo-tree))
+	register))
 
 
 
@@ -1589,8 +1607,7 @@ Argument is a character, naming the register."
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-highlight-active-branch (undo-tree-root undo-tree)))
   ;; highlight current node
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-    (undo-tree-draw-node (undo-tree-current undo-tree) 'current)))
+  (undo-tree-draw-node (undo-tree-current undo-tree) 'current))
 
 
 (defun undo-tree-highlight-active-branch (node)
@@ -1610,8 +1627,9 @@ Argument is a character, naming the register."
 
 
 (defun undo-tree-draw-node (node &optional current)
-  ;; Highlight NODE as current node.
+  ;; Draw symbol representing NODE in visualizer.
   (goto-char (undo-tree-node-marker node))
+  ;; if displaying timestamps, represent node by timestamp
   (if undo-tree-visualizer-timestamps
       (progn
         (backward-char 4)
@@ -1622,7 +1640,27 @@ Argument is a character, naming the register."
         (move-marker (undo-tree-node-marker node) (point))
         (put-text-property (- (point) 3) (+ (point) 5)
                            'undo-tree-node node))
-    (if current (undo-tree-insert ?x) (undo-tree-insert ?o))
+    ;; represent node by differentl symbols, depending on whether it's the
+    ;; current node or is saved in a register
+    (let ((register (undo-tree-node-register node)))
+      (cond
+       (current
+	(let ((undo-tree-insert-face
+	       (cons 'undo-tree-visualizer-current-face
+		     (and (boundp 'undo-tree-insert-face)
+			  (or (and (consp undo-tree-insert-face)
+				   undo-tree-insert-face)
+			      (list undo-tree-insert-face))))))
+	  (undo-tree-insert ?x)))
+       ((and register (eq node (get-register register)))
+	(let ((undo-tree-insert-face
+	       (cons 'undo-tree-visualizer-register-face
+		     (and (boundp 'undo-tree-insert-face)
+			  (or (and (consp undo-tree-insert-face)
+				   undo-tree-insert-face)
+			      (list undo-tree-insert-face))))))
+	  (undo-tree-insert register)))
+       (t (undo-tree-insert ?o))))
     (backward-char 1)
     (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
 
@@ -1860,8 +1898,7 @@ Within the undo-tree visualizer, the following keys are available:
   (unwind-protect
       (undo-tree-undo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
-    (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
     (setq buffer-read-only t)))
 
 
@@ -1877,8 +1914,7 @@ Within the undo-tree visualizer, the following keys are available:
       (undo-tree-redo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
     (setq buffer-read-only t)))
 
 
@@ -1905,8 +1941,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
   ;; re-highlight current node
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
-    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
+  (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
   (setq buffer-read-only t)))
 
 
