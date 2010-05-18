@@ -481,6 +481,7 @@
 ;;   meta-data to be stored in a plist associated with a node, and
 ;;   reimplemented storage of visualizer data on top of this
 ;; * display registers storing undo-tree state in visualizer
+;; * implemented keyboard selection in visualizer
 ;;
 ;; Version 0.2
 ;; * added support for marker undo entries
@@ -612,6 +613,9 @@ in visualizer."
 (defvar undo-tree-visualizer-map nil
   "Keymap used in undo-tree visualizer.")
 
+(defvar undo-tree-visualizer-selection-map nil
+  "Keymap used in undo-tree visualizer selection mode.")
+
 
 (defvar undo-tree-visualizer-parent-buffer nil
   "Parent buffer in visualizer.")
@@ -692,11 +696,14 @@ in visualizer."
     'undo-tree-visualize-switch-branch-left)
   ;; mouse sets buffer state to node at click
   (define-key undo-tree-visualizer-map [mouse-1]
-    'undo-tree-visualizer-set)
+    'undo-tree-visualizer-mouse-set)
   ;; toggle timestamps
   (define-key undo-tree-visualizer-map "t"
     'undo-tree-visualizer-toggle-timestamps)
-  ;; horizontal scrolling may be needed if tree is very wide
+  ;; selection mode
+  (define-key undo-tree-visualizer-map "s"
+    'undo-tree-visualizer-selection-mode)
+  ;; horizontal scrolling may be needed if the tree is very wide
   (define-key undo-tree-visualizer-map ","
     'undo-tree-visualizer-scroll-left)
   (define-key undo-tree-visualizer-map "."
@@ -712,6 +719,74 @@ in visualizer."
   (define-key undo-tree-visualizer-map "q"
     'undo-tree-visualizer-quit)
   (define-key undo-tree-visualizer-map "\C-q"
+    'undo-tree-visualizer-quit))
+
+
+(unless undo-tree-visualizer-selection-map
+  (setq undo-tree-visualizer-selection-map (make-keymap))
+  ;; vertical motion keys move up and down tree
+  (define-key undo-tree-visualizer-selection-map [remap previous-line]
+    'undo-tree-visualizer-select-previous)
+  (define-key undo-tree-visualizer-selection-map [remap next-line]
+    'undo-tree-visualizer-select-next)
+  (define-key undo-tree-visualizer-selection-map [up]
+    'undo-tree-visualizer-select-previous)
+  (define-key undo-tree-visualizer-selection-map "p"
+    'undo-tree-visualizer-select-previous)
+  (define-key undo-tree-visualizer-selection-map "\C-p"
+    'undo-tree-visualizer-select-previous)
+  (define-key undo-tree-visualizer-selection-map [down]
+    'undo-tree-visualizer-select-next)
+  (define-key undo-tree-visualizer-selection-map "n"
+    'undo-tree-visualizer-select-next)
+  (define-key undo-tree-visualizer-selection-map "\C-n"
+    'undo-tree-visualizer-select-next)
+  ;; vertical scroll keys move up and down quickly
+  (define-key undo-tree-visualizer-selection-map [next]
+    (lambda () (interactive) (undo-tree-visualizer-select-next 10)))
+  (define-key undo-tree-visualizer-selection-map [prior]
+    (lambda () (interactive) (undo-tree-visualizer-select-previous 10)))
+  ;; horizontal motion keys move to left and right siblings
+  (define-key undo-tree-visualizer-selection-map [remap forward-char]
+    'undo-tree-visualizer-select-right)
+  (define-key undo-tree-visualizer-selection-map [remap backward-char]
+    'undo-tree-visualizer-select-left)
+  (define-key undo-tree-visualizer-selection-map [right]
+    'undo-tree-visualizer-select-right)
+  (define-key undo-tree-visualizer-selection-map "f"
+    'undo-tree-visualizer-select-right)
+  (define-key undo-tree-visualizer-selection-map "\C-f"
+    'undo-tree-visualizer-select-right)
+  (define-key undo-tree-visualizer-selection-map [left]
+    'undo-tree-visualizer-select-left)
+  (define-key undo-tree-visualizer-selection-map "b"
+    'undo-tree-visualizer-select-left)
+  (define-key undo-tree-visualizer-selection-map "\C-b"
+    'undo-tree-visualizer-select-left)
+  ;; horizontal scroll keys move left or right quickly
+  (define-key undo-tree-visualizer-selection-map ","
+    (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
+  (define-key undo-tree-visualizer-selection-map "."
+    (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
+  (define-key undo-tree-visualizer-selection-map "<"
+    (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
+  (define-key undo-tree-visualizer-selection-map ">"
+    (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
+  ;; mouse or <enter> sets buffer state to node at point/click
+  (define-key undo-tree-visualizer-selection-map "\r"
+    'undo-tree-visualizer-set)
+  (define-key undo-tree-visualizer-selection-map [mouse-1]
+    'undo-tree-visualizer-mouse-set)
+  ;; toggle timestamps
+  (define-key undo-tree-visualizer-selection-map "t"
+    'undo-tree-visualizer-toggle-timestamps)
+  ;; quit visualizer selection mode
+  (define-key undo-tree-visualizer-selection-map "s"
+    'undo-tree-visualizer-mode)
+  ;; quit visualizer
+  (define-key undo-tree-visualizer-selection-map "q"
+    'undo-tree-visualizer-quit)
+  (define-key undo-tree-visualizer-selection-map "\C-q"
     'undo-tree-visualizer-quit))
 
 
@@ -1559,7 +1634,6 @@ Argument is a character, naming the register."
     (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
-    (setq cursor-type nil)
     (setq buffer-read-only nil)
     (undo-tree-draw-tree undo-tree)
     (setq buffer-read-only t)))
@@ -1878,11 +1952,12 @@ the parent buffer.
 Within the undo-tree visualizer, the following keys are available:
 
   \\{undo-tree-visualizer-map}"
-  (kill-all-local-variables)
+  (interactive)
   (setq major-mode 'undo-tree-visualizer-mode)
   (setq mode-name "undo-tree-visualizer-mode")
   (use-local-map undo-tree-visualizer-map)
   (setq truncate-lines t)
+  (setq cursor-type nil)
   (setq buffer-read-only t))
 
 
@@ -1969,11 +2044,11 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
 	(switch-to-buffer parent)))))
 
 
-(defun undo-tree-visualizer-set (pos)
+(defun undo-tree-visualizer-set (&optional pos)
   "Set buffer to state corresponding to undo tree node
-at POS."
-  (interactive "@e")
-  (setq pos (event-start (nth 1 pos)))
+at POS, or point if POS is nil."
+  (interactive)
+  (unless pos (setq pos (point)))
   (let ((node (get-text-property pos 'undo-tree-node)))
     (when node
       ;; set parent buffer to state corresponding to node at POS
@@ -1984,6 +2059,13 @@ at POS."
       ;; re-draw undo tree
       (undo-tree-draw-tree buffer-undo-tree)
       (setq buffer-read-only t))))
+
+
+(defun undo-tree-visualizer-mouse-set (pos)
+  "Set buffer to state corresponding to undo tree node
+at mouse event POS."
+  (interactive "@e")
+  (undo-tree-visualizer-set (event-start (nth 1 pos))))
 
 
 (defun undo-tree-visualizer-toggle-timestamps ()
@@ -2009,6 +2091,74 @@ at POS."
 (defun undo-tree-visualizer-scroll-right (&optional arg)
   (interactive "p")
   (scroll-left (or arg 1) t))
+
+
+
+
+;;; =====================================================================
+;;;                    Visualizer selection mode
+
+(defun undo-tree-visualizer-selection-mode ()
+  "Major mode used to select nodes in undo-tree visualizer."
+  (interactive)
+  (setq major-mode 'undo-tree-visualizer-selection-mode)
+  (setq mode-name "undo-tree-visualizer-selection-mode")
+  (use-local-map undo-tree-visualizer-selection-map)
+  (setq cursor-type 'box))
+
+
+(defun undo-tree-visualizer-select-previous (&optional arg)
+  "Move to previous node."
+  (interactive "p")
+  (let ((node (get-text-property (point) 'undo-tree-node)))
+    (catch 'top
+      (dotimes (i arg)
+	(unless (undo-tree-node-previous node) (throw 'top t))
+	(setq node (undo-tree-node-previous node))))
+    (goto-char (undo-tree-node-marker node))))
+
+
+(defun undo-tree-visualizer-select-next (&optional arg)
+  "Move to next node."
+  (interactive "p")
+  (let ((node (get-text-property (point) 'undo-tree-node)))
+    (catch 'bottom
+      (dotimes (i arg)
+	(unless (nth (undo-tree-node-branch node) (undo-tree-node-next node))
+	  (throw 'bottom t))
+	(setq node
+	      (nth (undo-tree-node-branch node) (undo-tree-node-next node)))))
+    (goto-char (undo-tree-node-marker node))))
+
+
+(defun undo-tree-visualizer-select-right (&optional arg)
+  "Move right to a sibling node."
+  (interactive "p")
+  (let ((pos (point))
+	(end (line-end-position))
+	node)
+    (catch 'end
+      (dotimes (i arg)
+	(while (not node)
+	  (forward-char)
+	  (setq node (get-text-property (point) 'undo-tree-node))
+	  (when (= (point) end) (throw 'end t)))))
+    (goto-char (if node (undo-tree-node-marker node) pos))))
+
+
+(defun undo-tree-visualizer-select-left (&optional arg)
+  "Move left to a sibling node."
+  (interactive "p")
+  (let ((pos (point))
+	(beg (line-beginning-position))
+	node)
+    (catch 'beg
+      (dotimes (i arg)
+	(while (not node)
+	  (backward-char)
+	  (setq node (get-text-property (point) 'undo-tree-node))
+	  (when (= (point) beg) (throw 'beg t)))))
+    (goto-char (if node (undo-tree-node-marker node) pos))))
 
 
 
