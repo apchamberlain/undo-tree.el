@@ -110,8 +110,8 @@
 ;; <up>  p  C-p  (`undo-tree-visualize-undo')
 ;;   Undo changes.
 ;;
-;; <down>  n  C-n  (`undo-tree-visualize-undo')
-;;   Undo changes.
+;; <down>  n  C-n  (`undo-tree-visualize-redo')
+;;   Redo changes.
 ;;
 ;; <left>  b  C-b  (`undo-tree-visualize-switch-branch-left')
 ;;   Switch to previous undo-tree branch.
