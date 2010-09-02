@@ -612,16 +612,17 @@ in visualizer."
   "Keymap used in undo-tree visualizer.")
 
 
-(defvar undo-tree-visualizer-buffer nil
+(defvar undo-tree-visualizer-parent-buffer nil
   "Parent buffer in visualizer.")
-(make-variable-buffer-local 'undo-tree-visualizer-buffer)
+(make-variable-buffer-local 'undo-tree-visualizer-parent-buffer)
 
 (defvar undo-tree-visualizer-timestamps nil
   "Non-nil when visualizer is displaying time-stamps.")
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
 
+(defconst undo-tree-visualizer-buffer-name " *undo-tree*")
 
-;; prevent debugger being caled on "No further redo information"
+;; prevent debugger being called on "No further redo information"
 (add-to-list 'debug-ignored-errors "^No further redo information")
 
 
@@ -1431,9 +1432,9 @@ Argument is a character, naming the register."
   (let ((undo-tree buffer-undo-tree)
         (buff (current-buffer))
 	(display-buffer-mark-dedicated 'soft))
-    (switch-to-buffer-other-window " *undo-tree*")
+    (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (undo-tree-visualizer-mode)
-    (setq undo-tree-visualizer-buffer buff)
+    (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
     (setq cursor-type nil)
     (setq buffer-read-only nil)
@@ -1446,7 +1447,7 @@ Argument is a character, naming the register."
   ;; buffer when visualizer is invoked.
   (unless undo-in-progress
     (unwind-protect
-	(with-current-buffer " *undo-tree*"
+	(with-current-buffer undo-tree-visualizer-buffer-name
 	  (undo-tree-visualizer-quit)))))
 
 
@@ -1746,10 +1747,10 @@ Within the undo-tree visualizer, the following keys are available:
   (setq buffer-read-only nil)
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
-  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
   (unwind-protect
       (undo-tree-undo arg)
-    (switch-to-buffer-other-window " *undo-tree*")
+    (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
       (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
     (setq buffer-read-only t)))
@@ -1761,10 +1762,10 @@ Within the undo-tree visualizer, the following keys are available:
   (setq buffer-read-only nil)
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
-  (switch-to-buffer-other-window undo-tree-visualizer-buffer)
+  (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
   (unwind-protect
       (undo-tree-redo arg)
-    (switch-to-buffer-other-window " *undo-tree*")
+    (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (let ((undo-tree-insert-face 'undo-tree-visualizer-current-face))
       (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
@@ -1813,9 +1814,9 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (undo-tree-clear-visualizer-data buffer-undo-tree)
   ;; remove kill visualizer hook from parent buffer
   (unwind-protect
-      (with-current-buffer undo-tree-visualizer-buffer
+      (with-current-buffer undo-tree-visualizer-parent-buffer
 	(remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
-    (let ((parent undo-tree-visualizer-buffer)
+    (let ((parent undo-tree-visualizer-parent-buffer)
 	  window)
       (kill-buffer nil)
       (if (setq window (get-buffer-window parent))
@@ -1831,9 +1832,9 @@ at POS."
   (let ((node (get-text-property pos 'undo-tree-node)))
     (when node
       ;; set parent buffer to state corresponding to node at POS
-      (set-buffer undo-tree-visualizer-buffer)
+      (set-buffer undo-tree-visualizer-parent-buffer)
       (undo-tree-set node)
-      (set-buffer " *undo-tree*")
+      (set-buffer undo-tree-visualizer-buffer-name)
       (setq buffer-read-only nil)
       ;; re-draw undo tree
       (undo-tree-draw-tree buffer-undo-tree)
