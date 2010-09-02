@@ -502,6 +502,7 @@
 ;;   is displaying it
 ;; * fixed bug in `undo-tree-switch-branch'
 ;; * general code tidying and reorganisation
+;; * fixed bugs in history-discarding logic
 ;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
@@ -990,15 +991,16 @@ Comparison is done with 'eq."
 	  nil)
 	 ;; discard root
          (t
+          ;; make child of root into new root
+          (setq node (setf (undo-tree-root buffer-undo-tree)
+                           (car (undo-tree-node-next node))))
 	  ;; update undo-tree size
 	  (decf (undo-tree-size buffer-undo-tree)
 		(+ (undo-list-byte-size (undo-tree-node-undo node))
 		   (undo-list-byte-size (undo-tree-node-redo node))))
-          ;; make child of root into new root
-          (setf node (setf (undo-tree-root buffer-undo-tree)
-                           (car (undo-tree-node-next node)))
-                (undo-tree-node-undo node) nil
-                (undo-tree-node-redo node) nil)
+	  ;; discard new root's undo data
+	  (setf (undo-tree-node-undo node) nil
+		(undo-tree-node-redo node) nil)
           ;; if new root has branches, or new root is current node, next node
           ;; to discard is oldest leaf, otherwise it's new root
           (if (or (> (length (undo-tree-node-next node)) 1)
@@ -1050,9 +1052,28 @@ set by `undo-limit', `undo-strong-limit' and `undo-outer-limit'."
       ;; discard nodes until next node to discard would bring memory use
       ;; within `undo-limit'
       (while (and node
+		  ;; check first if last discard has brought us within
+		  ;; `undo-limit', in case we can avoid more expensive
+		  ;; `undo-strong-limit' calculation
+		  ;; Note: this assumes undo-strong-limit > undo-limit;
+		  ;;       if not, effectively undo-strong-limit = undo-limit
+		  (> (undo-tree-size buffer-undo-tree) undo-limit)
                   (> (- (undo-tree-size buffer-undo-tree)
-                        (undo-list-byte-size (undo-tree-node-undo node))
-                        (undo-list-byte-size (undo-tree-node-redo node)))
+			;; if next node to discard is root, the memory we
+			;; free-up comes from discarding changesets from its
+			;; only child...
+			(if (eq node (undo-tree-root buffer-undo-tree))
+			    (+ (undo-list-byte-size
+				(undo-tree-node-undo
+				 (car (undo-tree-node-next node))))
+			       (undo-list-byte-size
+				(undo-tree-node-redo
+				 (car (undo-tree-node-next node)))))
+			  ;; ...otherwise, it comes from discarding changesets
+			  ;; from along with the node itself
+			  (+ (undo-list-byte-size (undo-tree-node-undo node))
+			     (undo-list-byte-size (undo-tree-node-redo node)))
+			  ))
                      undo-limit))
         (setq node (undo-tree-discard-node node)))
 
