@@ -299,7 +299,7 @@
 ;;                             o
 ;;
 ;; But if you're unlucky, and you happen to have moved the point (say) after
-;; getting to the point labelled "got this far", then you've "broken the undo
+;; getting to the state labelled "got this far", then you've "broken the undo
 ;; chain". Hold on to something solid, because things are about to get
 ;; hairy. If you try to undo now, Emacs thinks you're trying to undo the
 ;; undos! So to get back to the initial state you now have to rewind through
@@ -320,7 +320,7 @@
 ;;                             o       :   o
 ;;                                     :
 ;;                             (got this far, but
-;;                              broke undo chain)
+;;                              broke the undo chain)
 ;;
 ;; Confused?
 ;;
@@ -1701,6 +1701,9 @@ Argument is a character, naming the register."
   (dotimes (i arg) (insert str))
   (setq arg (* arg (length str)))
   (undo-tree-move-forward arg)
+  ;; make sure mark isn't active, otherwise `backward-delete-char' might
+  ;; delete region instead of single char if transient-mark-mode is enabled
+  (setq mark-active nil)
   (backward-delete-char arg)
   (when (boundp 'undo-tree-insert-face)
     (put-text-property (- (point) arg) (point) 'face undo-tree-insert-face)))
