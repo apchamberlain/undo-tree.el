@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009-2010 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.2
+;; Version: 0.2.1
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -475,6 +475,12 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.2.1
+;; * modified `undo-tree-node' defstruct and macros to allow arbitrary
+;;   meta-data to be stored in a plist associated with a node, and
+;;   reimplemented storage of visualizer data on top of this
+;;
 ;; Version 0.2
 ;; * added support for marker undo entries
 ;;
@@ -739,7 +745,7 @@ in visualizer."
                   (timestamp (current-time))
                   (branch 0)))
    (:copier nil))
-  previous next undo redo timestamp branch visualizer)
+  previous next undo redo timestamp branch meta-data)
 
 
 (defmacro undo-tree-node-p (n)
@@ -752,7 +758,8 @@ in visualizer."
   (undo-tree-visualizer-data
    (:type vector)   ; create unnamed struct
    (:constructor nil)
-   (:constructor make-undo-tree-visualizer-data)
+   (:constructor make-undo-tree-visualizer-data
+		 (&optional lwidth cwidth rwidth marker))
    (:copier nil))
   lwidth cwidth rwidth marker)
 
@@ -761,53 +768,65 @@ in visualizer."
   (let ((len (length (make-undo-tree-visualizer-data))))
     `(and (vectorp ,v) (= (length ,v) ,len))))
 
+(defmacro undo-tree-node-clear-visualizer-data (node)
+  `(setf (undo-tree-node-meta-data ,node)
+	 (delq nil
+	       (delq :visualizer
+		     (plist-put (undo-tree-node-meta-data ,node)
+				:visualizer nil)))))
+
+
 (defmacro undo-tree-node-lwidth (node)
-  `(when (vectorp (undo-tree-node-visualizer ,node))
-     (undo-tree-visualizer-data-lwidth
-      (undo-tree-node-visualizer ,node))))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
+     (when (undo-tree-visualizer-data-p v)
+       (undo-tree-visualizer-data-lwidth v))))
 
 (defmacro undo-tree-node-cwidth (node)
-  `(when (vectorp (undo-tree-node-visualizer ,node))
-     (undo-tree-visualizer-data-cwidth
-      (undo-tree-node-visualizer ,node))))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
+     (when (undo-tree-visualizer-data-p v)
+       (undo-tree-visualizer-data-cwidth v))))
 
 (defmacro undo-tree-node-rwidth (node)
-  `(when (vectorp (undo-tree-node-visualizer ,node))
-     (undo-tree-visualizer-data-rwidth
-      (undo-tree-node-visualizer ,node))))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
+     (when (undo-tree-visualizer-data-p v)
+       (undo-tree-visualizer-data-rwidth v))))
 
 (defmacro undo-tree-node-marker (node)
-  `(when (vectorp (undo-tree-node-visualizer ,node))
-     (undo-tree-visualizer-data-marker
-      (undo-tree-node-visualizer ,node))))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
+     (when (undo-tree-visualizer-data-p v)
+       (undo-tree-visualizer-data-marker v))))
 
 
 (defsetf undo-tree-node-lwidth (node) (val)
-  `(let ((v (undo-tree-node-visualizer ,node)))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
      (unless (undo-tree-visualizer-data-p v)
-       (setf (undo-tree-node-visualizer ,node)
-             (setq v (make-undo-tree-visualizer-data))))
+       (setf (undo-tree-node-meta-data ,node)
+	     (plist-put (undo-tree-node-meta-data ,node) :visualizer
+			(setq v (make-undo-tree-visualizer-data)))))
      (setf (undo-tree-visualizer-data-lwidth v) ,val)))
 
 (defsetf undo-tree-node-cwidth (node) (val)
-  `(let ((v (undo-tree-node-visualizer ,node)))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
      (unless (undo-tree-visualizer-data-p v)
-       (setf (undo-tree-node-visualizer ,node)
-             (setq v (make-undo-tree-visualizer-data))))
+       (setf (undo-tree-node-meta-data ,node)
+	     (plist-put (undo-tree-node-meta-data ,node) :visualizer
+			(setq v (make-undo-tree-visualizer-data)))))
      (setf (undo-tree-visualizer-data-cwidth v) ,val)))
 
 (defsetf undo-tree-node-rwidth (node) (val)
-  `(let ((v (undo-tree-node-visualizer ,node)))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
      (unless (undo-tree-visualizer-data-p v)
-       (setf (undo-tree-node-visualizer ,node)
-             (setq v (make-undo-tree-visualizer-data))))
+       (setf (undo-tree-node-meta-data ,node)
+	     (plist-put (undo-tree-node-meta-data ,node) :visualizer
+			(setq v (make-undo-tree-visualizer-data)))))
      (setf (undo-tree-visualizer-data-rwidth v) ,val)))
 
 (defsetf undo-tree-node-marker (node) (val)
-  `(let ((v (undo-tree-node-visualizer ,node)))
+  `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
      (unless (undo-tree-visualizer-data-p v)
-       (setf (undo-tree-node-visualizer ,node)
-             (setq v (make-undo-tree-visualizer-data))))
+       (setf (undo-tree-node-meta-data ,node)
+	     (plist-put (undo-tree-node-meta-data ,node) :visualizer
+			(setq v (make-undo-tree-visualizer-data)))))
      (setf (undo-tree-visualizer-data-marker v) ,val)))
 
 
@@ -1263,13 +1282,9 @@ which is defined in the `warnings' library.\n")
 
 (defun undo-tree-clear-visualizer-data (undo-tree)
   ;; Clear visualizer data from UNDO-TREE.
-  (let ((stack (list (undo-tree-root undo-tree)))
-        node)
-    (while stack
-      (setq node (pop stack))
-      (setf (undo-tree-node-visualizer node) nil)
-      (dolist (n (undo-tree-node-next node))
-        (push n stack)))))
+  (undo-tree-mapc
+   (lambda (node) (undo-tree-node-clear-visualizer-data node))
+   undo-tree))
 
 
 
@@ -1511,6 +1526,7 @@ Argument is a character, naming the register."
 (defun undo-tree-visualize ()
   "Visualize the current buffer's undo tree."
   (interactive)
+  (deactivate-mark)
   ;; throw error if undo is disabled in buffer
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
   ;; transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'
@@ -1840,6 +1856,7 @@ Within the undo-tree visualizer, the following keys are available:
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
+  (deactivate-mark)
   (unwind-protect
       (undo-tree-undo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
@@ -1855,6 +1872,7 @@ Within the undo-tree visualizer, the following keys are available:
   (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
+  (deactivate-mark)
   (unwind-protect
       (undo-tree-redo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
