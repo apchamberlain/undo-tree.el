@@ -495,14 +495,15 @@
 ;; * pass null argument to `kill-buffer' call in `undo-tree-visualizer-quit',
 ;;   since the argument's not optional in earlier Emacs versions
 ;; * added match for "No further redo information" to
-;;   `debug-ignored-errors' to prevent debugger being called on this
-;;   error
+;;   `debug-ignored-errors' to prevent debugger being called on this error
 ;; * made `undo-tree-visualizer-quit' select the window displaying the
 ;;   visualizer's parent buffer, or switch to the parent buffer if no window
 ;;   is displaying it
 ;; * fixed bug in `undo-tree-switch-branch'
 ;; * general code tidying and reorganisation
 ;; * fixed bugs in history-discarding logic
+;; * fixed bug in `undo-tree-insert' triggered by `undo-tree-visualizer-set'
+;;   by ensuring mark is deactivated
 ;;
 ;; Version 0.1.6
 ;; * added `undo-tree-mode-lighter' customization option to allow the
