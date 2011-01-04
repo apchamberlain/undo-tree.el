@@ -462,6 +462,145 @@
 ;;
 ;; Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
 ;; whatever state you ended at.
+;;
+;;
+;;
+;; Undo-in-Region
+;; ==============
+;;
+;; Emacs allows a very useful and powerful method of undoing only selected
+;; changes: when a region is active, only changes that affect the text within
+;; that region will are undone. With the standard Emacs undo system, changes
+;; produced by undoing-in-region naturally get added onto the end of the
+;; linear undo history:
+;;
+;;                       o
+;;                       |
+;;                       |  x  (second undo-in-region)
+;;                       o  |
+;;                       |  |
+;;                       |  o  (first undo-in-region)
+;;                       o  |
+;;                       | /
+;;                       |/
+;;                       o
+;;
+;; You can of course redo these undos-in-region as usual, by undoing the
+;; undos:
+;;
+;;                       o
+;;                       |
+;;                       |  o_
+;;                       o  | \
+;;                       |  |  |
+;;                       |  o  o  (undo the undo-in-region)
+;;                       o  |  |
+;;                       | /   |
+;;                       |/    |
+;;                       o     x  (undo the undo-in-region)
+;;
+;;
+;; In `undo-tree-mode', undo-in-region works similarly: when there's an active
+;; region, undoing only undoes changes that affect that region. However, the
+;; way these undos-in-region are recorded in the undo history is quite
+;; different. In `undo-tree-mode', undo-in-region creates a new branch in the
+;; undo history. The new branch consists of an undo step that undoes some of
+;; the changes that affect the current region, and another step that undoes
+;; the remaining changes needed to rejoin the previous undo history.
+;;
+;;      Previous undo history                Undo-in-region
+;;
+;;               o                                o
+;;               |                                |
+;;               |                                |
+;;               o                                o
+;;               |                                |\
+;;               |                                | \
+;;               o                                o  x  (undo-in-region)
+;;               |                                |  |
+;;               |                                |  |
+;;               x                                o  o
+;;
+;; As long as you don't change the active region after undoing-in-region,
+;; continuing to undo-in-region extends the new branch, pulling more changes
+;; that affect the current region into an undo step immediately above your
+;; current location in the undo tree, and pushing the point at which the new
+;; branch is attached further up the tree:
+;;
+;;      First undo-in-region                 Second undo-in-region
+;;
+;;               o                                o
+;;               |                                |\
+;;               |                                | \
+;;               o                                o  x  (undo-in-region)
+;;               |\                               |  |
+;;               | \                              |  |
+;;               o  x                             o  o
+;;               |  |                             |  |
+;;               |  |                             |  |
+;;               o  o                             o  o
+;;
+;; Redoing takes you back down the undo tree, as usual (as long as you haven't
+;; changed the active region after undoing-in-region, it doesn't matter if it
+;; is still active):
+;;
+;;                       o
+;;			 |\
+;;			 | \
+;;			 o  o
+;;			 |  |
+;;			 |  |
+;;			 o  o  (redo)
+;;			 |  |
+;;			 |  |
+;;			 o  x  (redo)
+;;
+;;
+;; What about redo-in-region? Obviously, this only makes sense if you have
+;; already undone some changes, so that there are some changes to redo!
+;; Redoing-in-region splits off a new branch of the undo history below your
+;; current location in the undo tree. This time, the new branch consists of a
+;; redo step that redoes some of the redo changes that affect the current
+;; region, followed by all the remaining redo changes.
+;;
+;;      Previous undo history                Redo-in-region
+;;
+;;               o                                o
+;;               |                                |
+;;               |                                |
+;;               x                                o
+;;               |                                |\
+;;               |                                | \
+;;               o                                o  x  (redo-in-region)
+;;               |                                |  |
+;;               |                                |  |
+;;               o                                o  o
+;;
+;; As long as you don't change the active region after redoing-in-region,
+;; continuing to redo-in-region extends the new branch, pulling more redo
+;; changes into a redo step immediately below your current location in the
+;; undo tree.
+;;
+;;      First redo-in-region                 Second redo-in-region
+;;
+;;          o                                     o
+;;          |                                     |
+;;          |                                     |
+;;          o                                     o
+;;          |\                                    |\
+;;          | \                                   | \
+;;          o  x  (redo-in-region)                o  o
+;;          |  |                                  |  |
+;;          |  |                                  |  |
+;;          o  o                                  o  x  (redo-in-region);;
+;;                                                   |
+;;                                                   |
+;;                                                   o
+;;
+;; Note that undo-in-region and redo-in-region only ever add new changes to
+;; the undo tree, they *never* modify existing undo history. So you can always
+;; return to previous buffer states by switching to a previous branch of the
+;; tree.
 
 
 
