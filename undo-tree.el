@@ -608,6 +608,9 @@
 ;;
 ;; Version 0.3
 ;; * implemented undo-in-region
+;; * fixed bugs in `undo-list-transfer-to-tree' and
+;;   `undo-list-rebuild-from-tree' which caused errors when undo history was
+;;   empty or disabled
 ;;
 ;; Version 0.2.1
 ;; * modified `undo-tree-node' defstruct and macros to allow arbitrary
@@ -1340,47 +1343,45 @@ Comparison is done with 'eq."
 (defun undo-list-transfer-to-tree ()
   ;; Transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'.
 
-  ;; if `buffer-undo-tree' is empty, create initial undo-tree and make sure
-  ;; there's a canary at end of `buffer-undo-list'
-  (when (null buffer-undo-tree)
-    (setq buffer-undo-tree (make-undo-tree))
+  ;; if `buffer-undo-tree' is empty, create initial undo-tree
+  (when (null buffer-undo-tree) (setq buffer-undo-tree (make-undo-tree)))
+  ;; make sure there's a canary at end of `buffer-undo-list'
+  (if (null buffer-undo-list)
+      (setq buffer-undo-list '(nil undo-tree-canary))
     (let ((elt (last buffer-undo-list)))
       (unless (eq (car elt) 'undo-tree-canary)
 	(setcdr elt '(nil undo-tree-canary)))))
 
-  ;; if `buffer-undo-list' is empty, add a canary
-  (if (null buffer-undo-list)
-      (setq buffer-undo-list '(nil undo-tree-canary))
-    (unless (eq (cadr buffer-undo-list) 'undo-tree-canary)
-      ;; create new node from first changeset in `buffer-undo-list', save old
-      ;; `buffer-undo-tree' current node, and make new node the current node
-      (let* ((node (make-undo-tree-node nil (undo-list-pop-changeset)))
-             (splice (undo-tree-current buffer-undo-tree))
-             (size (undo-list-byte-size (undo-tree-node-undo node))))
-        (setf (undo-tree-current buffer-undo-tree) node)
-        ;; grow tree fragment backwards using `buffer-undo-list' changesets
-        (while (and buffer-undo-list
-                    (not (eq (cadr buffer-undo-list) 'undo-tree-canary)))
-          (setq node
-                (undo-tree-grow-backwards node (undo-list-pop-changeset)))
-          (incf size (undo-list-byte-size (undo-tree-node-undo node))))
-        ;; if no undo history has been discarded from `buffer-undo-list' since
-        ;; last transfer, splice new tree fragment onto end of old
-        ;; `buffer-undo-tree' current node
-        (if (eq (cadr buffer-undo-list) 'undo-tree-canary)
-            (progn
-              (setf (undo-tree-node-previous node) splice)
-              (push node (undo-tree-node-next splice))
-              (setf (undo-tree-node-branch splice) 0)
-              (incf (undo-tree-size buffer-undo-tree) size))
-          ;; if undo history has been discarded, replace entire
-          ;; `buffer-undo-tree' with new tree fragment
-          (setq node (undo-tree-grow-backwards node nil))
-          (setf (undo-tree-root buffer-undo-tree) node)
-          (setq buffer-undo-list '(nil undo-tree-canary))
-          (setf (undo-tree-size buffer-undo-tree) size)))
-      ;; discard undo history if necessary
-      (undo-tree-discard-history))))
+  (unless (eq (cadr buffer-undo-list) 'undo-tree-canary)
+    ;; create new node from first changeset in `buffer-undo-list', save old
+    ;; `buffer-undo-tree' current node, and make new node the current node
+    (let* ((node (make-undo-tree-node nil (undo-list-pop-changeset)))
+	   (splice (undo-tree-current buffer-undo-tree))
+	   (size (undo-list-byte-size (undo-tree-node-undo node))))
+      (setf (undo-tree-current buffer-undo-tree) node)
+      ;; grow tree fragment backwards using `buffer-undo-list' changesets
+      (while (and buffer-undo-list
+		  (not (eq (cadr buffer-undo-list) 'undo-tree-canary)))
+	(setq node
+	      (undo-tree-grow-backwards node (undo-list-pop-changeset)))
+	(incf size (undo-list-byte-size (undo-tree-node-undo node))))
+      ;; if no undo history has been discarded from `buffer-undo-list' since
+      ;; last transfer, splice new tree fragment onto end of old
+      ;; `buffer-undo-tree' current node
+      (if (eq (cadr buffer-undo-list) 'undo-tree-canary)
+	  (progn
+	    (setf (undo-tree-node-previous node) splice)
+	    (push node (undo-tree-node-next splice))
+	    (setf (undo-tree-node-branch splice) 0)
+	    (incf (undo-tree-size buffer-undo-tree) size))
+	;; if undo history has been discarded, replace entire
+	;; `buffer-undo-tree' with new tree fragment
+	(setq node (undo-tree-grow-backwards node nil))
+	(setf (undo-tree-root buffer-undo-tree) node)
+	(setq buffer-undo-list '(nil undo-tree-canary))
+	(setf (undo-tree-size buffer-undo-tree) size)))
+    ;; discard undo history if necessary
+    (undo-tree-discard-history)))
 
 
 (defun undo-list-byte-size (undo-list)
@@ -1397,33 +1398,39 @@ Comparison is done with 'eq."
 
 (defun undo-list-rebuild-from-tree ()
   "Rebuild `buffer-undo-list' from information in `buffer-undo-tree'."
-  (setq buffer-undo-list nil)
-  (let ((stack (list (list (undo-tree-root buffer-undo-tree)))))
-    (push (sort (mapcar 'identity (undo-tree-node-next (caar stack)))
-		(lambda (a b)
-		  (time-less-p (undo-tree-node-timestamp a)
-			       (undo-tree-node-timestamp b))))
-	  stack)
-    ;; Traverse tree in depth-and-oldest-first order, but add undo records on
-    ;; the way down, and redo records on the way up.
-    (while (or (car stack)
-	       (not (eq (car (nth 1 stack))
-			(undo-tree-current buffer-undo-tree))))
-      (if (car stack)
-	  (progn
+  (unless (eq buffer-undo-list t)
+    (undo-list-transfer-to-tree)
+    (setq buffer-undo-list nil)
+    (when buffer-undo-tree
+      (let ((stack (list (list (undo-tree-root buffer-undo-tree)))))
+	(push (sort (mapcar 'identity (undo-tree-node-next (caar stack)))
+		    (lambda (a b)
+		      (time-less-p (undo-tree-node-timestamp a)
+				   (undo-tree-node-timestamp b))))
+	      stack)
+	;; Traverse tree in depth-and-oldest-first order, but add undo records
+	;; on the way down, and redo records on the way up.
+	(while (or (car stack)
+		   (not (eq (car (nth 1 stack))
+			    (undo-tree-current buffer-undo-tree))))
+	  (if (car stack)
+	      (progn
+		(setq buffer-undo-list
+		      (append (undo-tree-node-undo (caar stack))
+			      buffer-undo-list))
+		(undo-boundary)
+		(push (sort (mapcar 'identity
+				    (undo-tree-node-next (caar stack)))
+			    (lambda (a b)
+			      (time-less-p (undo-tree-node-timestamp a)
+					   (undo-tree-node-timestamp b))))
+		      stack))
+	    (pop stack)
 	    (setq buffer-undo-list
-		  (append (undo-tree-node-undo (caar stack)) buffer-undo-list))
+		  (append (undo-tree-node-redo (caar stack))
+			  buffer-undo-list))
 	    (undo-boundary)
-	    (push (sort (mapcar 'identity (undo-tree-node-next (caar stack)))
-			(lambda (a b)
-			  (time-less-p (undo-tree-node-timestamp a)
-				       (undo-tree-node-timestamp b))))
-		  stack))
-	(pop stack)
-	(setq buffer-undo-list
-	      (append (undo-tree-node-redo (caar stack)) buffer-undo-list))
-	(undo-boundary)
-	(pop (car stack))))))
+	    (pop (car stack))))))))
 
 
 
