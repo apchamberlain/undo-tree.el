@@ -611,6 +611,8 @@
 ;; * fixed bugs in `undo-list-transfer-to-tree' and
 ;;   `undo-list-rebuild-from-tree' which caused errors when undo history was
 ;;   empty or disabled
+;; * defun `region-active-p' if not already defined, for compatibility with
+;;   older Emacsen
 ;;
 ;; Version 0.2.1
 ;; * modified `undo-tree-node' defstruct and macros to allow arbitrary
@@ -690,6 +692,11 @@
 ;; `characterp' isn't defined in Emacs versions <= 22
 (unless (fboundp 'characterp)
   (defalias 'characterp 'char-valid-p))
+
+;; `region-active-p' isn't defined in Emacs versions <= 22
+(unless (fboundp 'region-active-p)
+  (defun region-active-p () (and transient-mark-mode mark-active)))
+
 
 
 ;;; =====================================================================
