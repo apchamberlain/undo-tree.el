@@ -592,7 +592,7 @@
 ;;          o  x  (redo-in-region)                o  o
 ;;          |  |                                  |  |
 ;;          |  |                                  |  |
-;;          o  o                                  o  x  (redo-in-region);;
+;;          o  o                                  o  x  (redo-in-region)
 ;;                                                   |
 ;;                                                   |
 ;;                                                   o
