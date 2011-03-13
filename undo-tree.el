@@ -5,7 +5,7 @@
 ;; Copyright (C) 2009-2011 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.3
+;; Version: 0.3.1
 ;; Keywords: undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -605,6 +605,13 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.3.1
+;; * use `get-buffer-create' when creating the visualizer buffer in
+;;   `undo-tree-visualize', to fix bug caused by `global-undo-tree-mode' being
+;;   enabled in the visualizer when `default-major-mode' is set to something
+;;   other than `fundamental-mode' (thanks to Michael Heerdegen for suggesting
+;;   this fix)
 ;;
 ;; Version 0.3
 ;; * implemented undo-in-region
@@ -2538,7 +2545,8 @@ Argument is a character, naming the register."
   (let ((undo-tree buffer-undo-tree)
         (buff (current-buffer))
 	(display-buffer-mark-dedicated 'soft))
-    (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
+    (switch-to-buffer-other-window
+     (get-buffer-create undo-tree-visualizer-buffer-name))
     (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
