@@ -612,6 +612,11 @@
 ;;   enabled in the visualizer when `default-major-mode' is set to something
 ;;   other than `fundamental-mode' (thanks to Michael Heerdegen for suggesting
 ;;   this fix)
+;; * modified `turn-on-undo-tree-mode' to avoid turning on `undo-tree-mode' if
+;;   the buffer's `major-mode' implements its own undo system, by checking
+;;   whether `undo' is remapped, the default "C-/" or "C-_" bindings have been
+;;   overridden,  or the `major-mode' is listed in
+;;   `undo-tree-incompatible-major-modes'
 ;;
 ;; Version 0.3
 ;; * implemented undo-in-region
@@ -723,6 +728,12 @@
 when `undo-tree-mode' is enabled."
   :group 'undo-tree
   :type 'string)
+
+(defcustom undo-tree-incompatible-major-modes nil
+  "List of major-modes in which `undo-tree-mode' should not be enabled.
+\(See `turn-on-undo-tree-mode'.\)"
+  :group 'undo-tree
+  :type '(repeat symbol))
 
 (defcustom undo-tree-visualizer-spacing 3
   "Horizontal spacing in undo-tree visualization.
@@ -2233,8 +2244,47 @@ Within the undo-tree visualizer, the following keys are available:
 
 
 (defun turn-on-undo-tree-mode ()
-  "Enable undo-tree-mode."
-  (undo-tree-mode 1))
+  "Enable `undo-tree-mode' in the current buffer, when appropriate.
+Some major modes implement their own undo system, which should
+not normally be overridden by `undo-tree-mode'. This command does
+not enable `undo-tree-mode' in such buffers. If you want to force
+`undo-tree-mode' to be enabled regardless, use (undo-tree-mode 1)
+instead.
+
+The heuristic used to detect major modes in which
+`undo-tree-mode' should not be used is to check whether either
+the `undo' command has been remapped, or the default undo
+keybindings (C-/ and C-_) have been overridden somewhere other
+than in the global map. In addition, `undo-tree-mode' will not be
+enabled if the buffer's `major-mode' appears in
+`undo-tree-incompatible-major-modes'."
+  (interactive)
+  (if (or (key-binding [remap undo])
+	  (undo-tree-overridden-undo-bindings-p)
+	  (memq major-mode undo-tree-incompatible-major-modes))
+      (when (interactive-p)
+	(message "Incompatible major-mode `%s'; undo-tree-mode NOT enabled"
+		 major-mode))
+    (undo-tree-mode 1)))
+
+
+(defun undo-tree-overridden-undo-bindings-p ()
+  "Returns t if default undo bindings are overridden, nil otherwise.
+Checks if either of the default undo key bindings (\"C-/\" or
+\"C-_\") are overridden in the current buffer by any keymap other
+than the global one. (So global redefinitions of the default undo
+key bindings do not count.)"
+  (let ((binding1 (lookup-key (current-global-map) [?\C-/]))
+	(binding2 (lookup-key (current-global-map) [?\C-_])))
+    (global-set-key [?\C-/] 'undo)
+    (global-set-key [?\C-_] 'undo)
+    (unwind-protect
+	(or (and (key-binding [?\C-/])
+		 (not (eq (key-binding [?\C-/]) 'undo)))
+	    (and (key-binding [?\C-_])
+		 (not (eq (key-binding [?\C-_]) 'undo))))
+      (global-set-key [?\C-/] binding1)
+      (global-set-key [?\C-_] binding2))))
 
 
 (define-globalized-minor-mode global-undo-tree-mode
