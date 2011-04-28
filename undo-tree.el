@@ -617,6 +617,9 @@
 ;;   whether `undo' is remapped, the default "C-/" or "C-_" bindings have been
 ;;   overridden,  or the `major-mode' is listed in
 ;;   `undo-tree-incompatible-major-modes'
+;; * discard position entries from `buffer-undo-list' changesets created by
+;;   undoing or redoing, to ensure point is always moved to where the change
+;;   is (standard Emacs `undo' also does this)
 ;;
 ;; Version 0.3
 ;; * implemented undo-in-region
@@ -1254,7 +1257,7 @@ that are already part of `buffer-undo-tree'."
 (defun undo-tree-position (node list)
   "Find the first occurrence of NODE in LIST.
 Return the index of the matching item, or nil of not found.
-Comparison is done with 'eq."
+Comparison is done with `eq'."
   (let ((i 0))
     (catch 'found
       (while (progn
@@ -1325,10 +1328,14 @@ Comparison is done with 'eq."
   undo-list)
 
 
-(defun undo-list-pop-changeset ()
-  ;; Pop changeset from `buffer-undo-list'.
-  ;; discard undo boundaries at head of list
-  (while (null (car buffer-undo-list))
+(defun undo-list-pop-changeset (&optional discard-pos)
+  ;; Pop changeset from `buffer-undo-list'. If DISCARD-POS is non-nil, discard
+  ;; any position entries from changeset.
+
+  ;; discard undo boundaries and (if DISCARD-POS is non-nil) position entries
+  ;; at head of undo list
+  (while (or (null (car buffer-undo-list))
+	     (and discard-pos (integerp (car buffer-undo-list))))
     (setq buffer-undo-list (cdr buffer-undo-list)))
   ;; pop elements up to next undo boundary
   (unless (eq (car buffer-undo-list) 'undo-tree-canary)
@@ -1337,6 +1344,10 @@ Comparison is done with 'eq."
       (while (progn
 	       (undo-tree-move-GC-elts-to-pool (car p))
 	       (car buffer-undo-list))
+	;; discard position entries at head of undo list
+	(when discard-pos
+	  (while (and discard-pos (integerp (car buffer-undo-list)))
+	    (setq buffer-undo-list (cdr buffer-undo-list))))
         (setcdr p (list (pop buffer-undo-list)))
 	(setq p (cdr p)))
       changeset)))
@@ -2361,7 +2372,8 @@ undoing."
 	(when (undo-tree-node-redo current)
 	  (decf (undo-tree-size buffer-undo-tree)
 		(undo-list-byte-size (undo-tree-node-redo current))))
-	(setf (undo-tree-node-redo current) (undo-list-pop-changeset))
+	(setf (undo-tree-node-redo current)
+	      (undo-list-pop-changeset 'discard-pos))
 	(incf (undo-tree-size buffer-undo-tree)
 	      (undo-list-byte-size (undo-tree-node-redo current))))
 
@@ -2461,7 +2473,8 @@ redoing."
 	(when (undo-tree-node-undo current)
 	  (decf (undo-tree-size buffer-undo-tree)
 		(undo-list-byte-size (undo-tree-node-undo current))))
-	(setf (undo-tree-node-undo current) (undo-list-pop-changeset))
+	(setf (undo-tree-node-undo current)
+	      (undo-list-pop-changeset 'discard-pos))
 	(incf (undo-tree-size buffer-undo-tree)
 	      (undo-list-byte-size (undo-tree-node-undo current))))
 
