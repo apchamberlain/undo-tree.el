@@ -620,6 +620,8 @@
 ;; * discard position entries from `buffer-undo-list' changesets created by
 ;;   undoing or redoing, to ensure point is always moved to where the change
 ;;   is (standard Emacs `undo' also does this)
+;; * fixed `undo-tree-draw-node' to use correct faces and indicate registers
+;;   when displaying timestamps in visualizer
 ;;
 ;; Version 0.3
 ;; * implemented undo-in-region
@@ -2682,40 +2684,51 @@ Argument is a character, naming the register."
 (defun undo-tree-draw-node (node &optional current)
   ;; Draw symbol representing NODE in visualizer.
   (goto-char (undo-tree-node-marker node))
-  ;; if displaying timestamps, represent node by timestamp
-  (if undo-tree-visualizer-timestamps
-      (progn
-        (backward-char 4)
-        (if current (undo-tree-insert ?*) (undo-tree-insert ? ))
-        (undo-tree-insert
-         (undo-tree-timestamp-to-string (undo-tree-node-timestamp node)))
-        (backward-char 5)
-        (move-marker (undo-tree-node-marker node) (point))
-        (put-text-property (- (point) 3) (+ (point) 5)
-                           'undo-tree-node node))
+  (when undo-tree-visualizer-timestamps (backward-char 5))
+
+  (let ((register (undo-tree-node-register node))
+	node-string)
+    (unless (and register (eq node (get-register register)))
+      (setq register nil))
     ;; represent node by differentl symbols, depending on whether it's the
     ;; current node or is saved in a register
-    (let ((register (undo-tree-node-register node)))
-      (cond
-       (current
-	(let ((undo-tree-insert-face
-	       (cons 'undo-tree-visualizer-current-face
-		     (and (boundp 'undo-tree-insert-face)
-			  (or (and (consp undo-tree-insert-face)
-				   undo-tree-insert-face)
-			      (list undo-tree-insert-face))))))
-	  (undo-tree-insert ?x)))
-       ((and register (eq node (get-register register)))
-	(let ((undo-tree-insert-face
-	       (cons 'undo-tree-visualizer-register-face
-		     (and (boundp 'undo-tree-insert-face)
-			  (or (and (consp undo-tree-insert-face)
-				   undo-tree-insert-face)
-			      (list undo-tree-insert-face))))))
-	  (undo-tree-insert register)))
-       (t (undo-tree-insert ?o))))
-    (backward-char 1)
-    (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
+    (setq node-string
+	  (cond
+	   (undo-tree-visualizer-timestamps
+	    (undo-tree-timestamp-to-string (undo-tree-node-timestamp node)))
+	   (current "x")
+	   (register (char-to-string register))
+	   (t "o")))
+    (when undo-tree-visualizer-timestamps
+      (setq node-string
+	    (concat (if current "*" " ") node-string
+		    (if register (concat "(" (char-to-string register) ")")
+		      "   "))))
+
+    (cond
+     (current
+      (let ((undo-tree-insert-face
+             (cons 'undo-tree-visualizer-current-face
+                   (and (boundp 'undo-tree-insert-face)
+                        (or (and (consp undo-tree-insert-face)
+                                 undo-tree-insert-face)
+                            (list undo-tree-insert-face))))))
+        (undo-tree-insert node-string)))
+     (register
+      (let ((undo-tree-insert-face
+             (cons 'undo-tree-visualizer-register-face
+                   (and (boundp 'undo-tree-insert-face)
+                        (or (and (consp undo-tree-insert-face)
+                                 undo-tree-insert-face)
+                            (list undo-tree-insert-face))))))
+        (undo-tree-insert node-string)))
+     (t (undo-tree-insert node-string)))
+
+    (backward-char (if undo-tree-visualizer-timestamps 7 1))
+    (move-marker (undo-tree-node-marker node) (point))
+    (put-text-property (- (point) (if undo-tree-visualizer-timestamps 3 0))
+                       (+ (point) (if undo-tree-visualizer-timestamps 5 1))
+                       'undo-tree-node node)))
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
@@ -3053,8 +3066,8 @@ at mouse event POS."
   (setq undo-tree-visualizer-spacing
         (if (setq undo-tree-visualizer-timestamps
                   (not undo-tree-visualizer-timestamps))
-            ;; need sufficient space if TIMESTAMP is set
-            (max 9 (default-value 'undo-tree-visualizer-spacing))
+            ;; need sufficient space if displaying timestamps
+            (max 13 (default-value 'undo-tree-visualizer-spacing))
           (default-value 'undo-tree-visualizer-spacing)))
   ;; redraw tree
   (setq buffer-read-only nil)
