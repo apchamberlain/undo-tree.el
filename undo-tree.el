@@ -2276,8 +2276,8 @@ enabled if the buffer's `major-mode' appears in
 	  (undo-tree-overridden-undo-bindings-p)
 	  (memq major-mode undo-tree-incompatible-major-modes))
       (when (interactive-p)
-	(message "Incompatible major-mode `%s'; undo-tree-mode NOT enabled"
-		 major-mode))
+	(message "Buffer does not support undo-tree-mode;\
+ undo-tree-mode NOT enabled"))
     (undo-tree-mode 1)))
 
 
