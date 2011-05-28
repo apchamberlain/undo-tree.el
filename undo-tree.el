@@ -1,4 +1,3 @@
-
 ;;; undo-tree.el --- Treat undo history as a tree
 
 
@@ -6,7 +5,7 @@
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
 ;; Version: 0.3.1
-;; Keywords: undo, redo, history, tree
+;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
 
@@ -2228,6 +2227,7 @@ of either NODE itself or some node above it in the tree."
 ;;; =====================================================================
 ;;;                        Undo-tree commands
 
+;;;###autoload
 (define-minor-mode undo-tree-mode
   "Toggle undo-tree mode.
 With no argument, this command toggles the mode.
@@ -2256,7 +2256,7 @@ Within the undo-tree visualizer, the following keys are available:
     (setq buffer-undo-tree nil)))
 
 
-(defun turn-on-undo-tree-mode ()
+(defun turn-on-undo-tree-mode (&optional print-message)
   "Enable `undo-tree-mode' in the current buffer, when appropriate.
 Some major modes implement their own undo system, which should
 not normally be overridden by `undo-tree-mode'. This command does
@@ -2271,11 +2271,11 @@ keybindings (C-/ and C-_) have been overridden somewhere other
 than in the global map. In addition, `undo-tree-mode' will not be
 enabled if the buffer's `major-mode' appears in
 `undo-tree-incompatible-major-modes'."
-  (interactive)
+  (interactive "p")
   (if (or (key-binding [remap undo])
 	  (undo-tree-overridden-undo-bindings-p)
 	  (memq major-mode undo-tree-incompatible-major-modes))
-      (when (interactive-p)
+      (when print-message
 	(message "Buffer does not support undo-tree-mode;\
  undo-tree-mode NOT enabled"))
     (undo-tree-mode 1)))
@@ -2300,6 +2300,7 @@ key bindings do not count.)"
       (global-set-key [?\C-_] binding2))))
 
 
+;;;###autoload
 (define-globalized-minor-mode global-undo-tree-mode
   undo-tree-mode turn-on-undo-tree-mode)
 
