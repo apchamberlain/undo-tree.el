@@ -4,7 +4,7 @@
 ;; Copyright (C) 2009-2011 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.3.1
+;; Version: 0.3.2
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -604,6 +604,10 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.3.2
+;; * added additional check in `undo-list-GCd-marker-elt-p' to guard against
+;;   undo elements being mis-identified as marker elements.
 ;;
 ;; Version 0.3.1
 ;; * use `get-buffer-create' when creating the visualizer buffer in
@@ -1288,7 +1292,17 @@ Comparison is done with `eq'."
   `(markerp (car-safe ,elt)))
 
 (defmacro undo-list-GCd-marker-elt-p (elt)
-  `(and (symbolp (car-safe ,elt)) (numberp (cdr-safe ,elt))))
+  ;; Return t if ELT is a marker element whose marker has been moved to the
+  ;; object-pool, so may potentially have been garbage-collected.
+  ;; Note: Valid marker undo elements should be uniquely identified as cons
+  ;; cells with a symbol in the car (replacing the marker), and a number in
+  ;; the cdr. However, to guard against future changes to undo element
+  ;; formats, we perform an additional redundant check on the symbol name.
+  `(and (symbolp (car-safe ,elt))
+	(let ((str (symbol-name (car ,elt))))
+	  (and (> (length str) 12)
+	       (string= (substring str 0 12) "undo-tree-id")))
+	(numberp (cdr-safe ,elt))))
 
 
 (defun undo-tree-move-GC-elts-to-pool (elt)
