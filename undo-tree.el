@@ -608,6 +608,7 @@
 ;; Version 0.3.2
 ;; * added additional check in `undo-list-GCd-marker-elt-p' to guard against
 ;;   undo elements being mis-identified as marker elements.
+;; * fixed bug in `undo-list-transfer-to-tree'
 ;;
 ;; Version 0.3.1
 ;; * use `get-buffer-create' when creating the visualizer buffer in
@@ -1298,7 +1299,8 @@ Comparison is done with `eq'."
   ;; cells with a symbol in the car (replacing the marker), and a number in
   ;; the cdr. However, to guard against future changes to undo element
   ;; formats, we perform an additional redundant check on the symbol name.
-  `(and (symbolp (car-safe ,elt))
+  `(and (car-safe ,elt)
+	(symbolp (car ,elt))
 	(let ((str (symbol-name (car ,elt))))
 	  (and (> (length str) 12)
 	       (string= (substring str 0 12) "undo-tree-id")))
@@ -1397,11 +1399,8 @@ Comparison is done with `eq'."
   ;; if `buffer-undo-tree' is empty, create initial undo-tree
   (when (null buffer-undo-tree) (setq buffer-undo-tree (make-undo-tree)))
   ;; make sure there's a canary at end of `buffer-undo-list'
-  (if (null buffer-undo-list)
-      (setq buffer-undo-list '(nil undo-tree-canary))
-    (let ((elt (last buffer-undo-list)))
-      (unless (eq (car elt) 'undo-tree-canary)
-	(setcdr elt '(nil undo-tree-canary)))))
+  (when (null buffer-undo-list)
+    (setq buffer-undo-list '(nil undo-tree-canary)))
 
   (unless (eq (cadr buffer-undo-list) 'undo-tree-canary)
     ;; create new node from first changeset in `buffer-undo-list', save old
@@ -1430,7 +1429,8 @@ Comparison is done with `eq'."
 	(setq node (undo-tree-grow-backwards node nil))
 	(setf (undo-tree-root buffer-undo-tree) node)
 	(setq buffer-undo-list '(nil undo-tree-canary))
-	(setf (undo-tree-size buffer-undo-tree) size)))
+	(setf (undo-tree-size buffer-undo-tree) size)
+	(setq buffer-undo-list '(nil undo-tree-canary))))
     ;; discard undo history if necessary
     (undo-tree-discard-history)))
 
