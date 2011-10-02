@@ -1520,6 +1520,10 @@ Comparison is done with `eq'."
 	  nil)
 	 ;; discard root
          (t
+	  ;; clear any register referring to root
+	  (let ((r (undo-tree-node-register node)))
+	    (when (and r (eq (get-register r) node))
+	      (set-register r nil)))
           ;; make child of root into new root
           (setq node (setf (undo-tree-root buffer-undo-tree)
                            (car (undo-tree-node-next node))))
@@ -1542,6 +1546,10 @@ Comparison is done with `eq'."
       (let* ((parent (undo-tree-node-previous node))
              (current (nth (undo-tree-node-branch parent)
                            (undo-tree-node-next parent))))
+	;; clear any register referring to the discarded node
+	(let ((r (undo-tree-node-register node)))
+	  (when (and r (eq (get-register r) node))
+	    (set-register r nil)))
 	;; update undo-tree size
 	(decf (undo-tree-size buffer-undo-tree)
 	      (+ (undo-list-byte-size (undo-tree-node-undo node))
