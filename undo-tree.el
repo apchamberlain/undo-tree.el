@@ -75,10 +75,10 @@
 ;; Quick-Start
 ;; ===========
 ;;
-;; If you're the kind of person who likes jump in the car and drive, without
-;; bothering to first figure out whether the button on the left dips the
-;; headlights or operates the ejector seat (after all, you'll soon figure it
-;; out when you push it), then here's the minimum you need to know:
+;; If you're the kind of person who likes to jump in the car and drive,
+;; without bothering to first figure out whether the button on the left dips
+;; the headlights or operates the ejector seat (after all, you'll soon figure
+;; it out when you push it), then here's the minimum you need to know:
 ;;
 ;; `undo-tree-mode' and `global-undo-tree-mode'
 ;;   Enable undo-tree mode (either in the current buffer or globally).
@@ -130,10 +130,10 @@
 ;; .  >
 ;;   Scroll right.
 ;;
-;; <pgup>
+;; <pgup>  M-v
 ;;   Scroll up.
 ;;
-;; <pgdown>
+;; <pgdown>  C-v
 ;;   Scroll down.
 ;;
 ;;
@@ -469,7 +469,7 @@
 ;;
 ;; Emacs allows a very useful and powerful method of undoing only selected
 ;; changes: when a region is active, only changes that affect the text within
-;; that region will are undone. With the standard Emacs undo system, changes
+;; that region will be undone. With the standard Emacs undo system, changes
 ;; produced by undoing-in-region naturally get added onto the end of the
 ;; linear undo history:
 ;;
