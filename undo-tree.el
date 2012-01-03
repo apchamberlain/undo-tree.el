@@ -1,7 +1,7 @@
 ;;; undo-tree.el --- Treat undo history as a tree
 
 
-;; Copyright (C) 2009-2011 Toby Cubitt
+;; Copyright (C) 2009-2012 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
 ;; Version: 0.3.2
