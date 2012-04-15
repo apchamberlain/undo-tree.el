@@ -608,6 +608,8 @@
 ;; Version 0.3.4
 ;; * set `permanent-local' property on `buffer-undo-tree', to prevent history
 ;;   being discarded when switching major-mode
+;; * added `undo-tree-enabled-undo-in-region' customization option to allow
+;;   undo-in-region to be disabled.
 ;;
 ;; Version 0.3.3;
 ;; * added `term-mode' to `undo-tree-incompatible-major-modes'
@@ -745,6 +747,16 @@
 when `undo-tree-mode' is enabled."
   :group 'undo-tree
   :type 'string)
+
+(defcustom undo-tree-enable-undo-in-region t
+  "When non-nil, enable undo-in-region.
+
+When undo-in-region is enabled, undoing or redoing when the
+region is active (in `transient-mark-mode') or with a prefix
+argument (not in `transient-mark-mode') only undoes changes
+within the current region."
+  :group 'undo-tree
+  :type 'boolean)
 
 (defcustom undo-tree-incompatible-major-modes '(term-mode)
   "List of major-modes in which `undo-tree-mode' should not be enabled.
@@ -2354,7 +2366,9 @@ undoing."
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
 
   (let ((undo-in-progress t)
-	(undo-in-region (or (region-active-p) (and arg (not (numberp arg)))))
+	(undo-in-region (and undo-tree-enable-undo-in-region
+			     (or (region-active-p)
+				 (and arg (not (numberp arg))))))
 	pos current)
     ;; transfer entries accumulated in `buffer-undo-list' to
     ;; `buffer-undo-tree'
@@ -2451,7 +2465,9 @@ redoing."
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
 
   (let ((undo-in-progress t)
-	(redo-in-region (or (region-active-p) (and arg (not (numberp arg)))))
+	(redo-in-region (and undo-tree-enable-undo-in-region
+			     (or (region-active-p)
+				 (and arg (not (numberp arg))))))
 	pos current)
     ;; transfer entries accumulated in `buffer-undo-list' to
     ;; `buffer-undo-tree'
