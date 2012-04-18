@@ -610,6 +610,10 @@
 ;;   being discarded when switching major-mode
 ;; * added `undo-tree-enabled-undo-in-region' customization option to allow
 ;;   undo-in-region to be disabled.
+;; * fixed bug in `undo-list-pop-changeset' which, through a subtle chain of
+;;   consequences, occasionally caused undo-tree-mode to lose large amounts of
+;;   undo history (thanks to Magnar Sveen for his sterling efforts in helping
+;;   track this down!)
 ;;
 ;; Version 0.3.3;
 ;; * added `term-mode' to `undo-tree-incompatible-major-modes'
@@ -1374,17 +1378,17 @@ Comparison is done with `eq'."
   (while (or (null (car buffer-undo-list))
 	     (and discard-pos (integerp (car buffer-undo-list))))
     (setq buffer-undo-list (cdr buffer-undo-list)))
-  ;; pop elements up to next undo boundary
-  (unless (eq (car buffer-undo-list) 'undo-tree-canary)
+  ;; pop elements up to next undo boundary, discarding position entries if
+  ;; DISCARD-POS is non-nil
+  (if (eq (car buffer-undo-list) 'undo-tree-canary)
+      (push nil buffer-undo-list)
     (let* ((changeset (list (pop buffer-undo-list)))
            (p changeset))
       (while (progn
 	       (undo-tree-move-GC-elts-to-pool (car p))
+	       (while (and discard-pos (integerp (car buffer-undo-list)))
+		 (setq buffer-undo-list (cdr buffer-undo-list)))
 	       (car buffer-undo-list))
-	;; discard position entries at head of undo list
-	(when discard-pos
-	  (while (and discard-pos (integerp (car buffer-undo-list)))
-	    (setq buffer-undo-list (cdr buffer-undo-list))))
         (setcdr p (list (pop buffer-undo-list)))
 	(setq p (cdr p)))
       changeset)))
