@@ -4,7 +4,7 @@
 ;; Copyright (C) 2009-2012 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.3.5
+;; Version: 0.4
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -604,6 +604,11 @@
 
 
 ;;; Change Log:
+;; Version 0.4
+;; * implemented persistent history storage: `undo-tree-save-history' and
+;;   `undo-tree-load-history' save and restore an undo tree to file, enabling
+;;   `undo-tree-auto-save-history' causes history to be saved and restored
+;;   automatically when saving or loading files
 ;;
 ;; Version 0.3.5
 ;; * improved `undo-tree-switch-branch': display current branch number in
@@ -613,7 +618,7 @@
 ;; Version 0.3.4
 ;; * set `permanent-local' property on `buffer-undo-tree', to prevent history
 ;;   being discarded when switching major-mode
-;; * added `undo-tree-enabled-undo-in-region' customization option to allow
+;; * added `undo-tree-enable-undo-in-region' customization option to allow
 ;;   undo-in-region to be disabled.
 ;; * fixed bug in `undo-list-pop-changeset' which, through a subtle chain of
 ;;   consequences, occasionally caused undo-tree-mode to lose large amounts of
@@ -766,6 +771,28 @@ argument (not in `transient-mark-mode') only undoes changes
 within the current region."
   :group 'undo-tree
   :type 'boolean)
+
+(defcustom undo-tree-auto-save-history nil
+  "When non-nil, `undo-tree-mode' will save undo history to file
+when a buffer is saved to file.
+
+It will automatically load undo history when a buffer is loaded
+from file, if an undo save file exists.
+
+Undo-tree history is saved to a file called
+\".<buffer-file-name>.~undo-tree\" in the same directory as the
+file itself.
+
+WARNING! `undo-tree-auto-save-history' will not work properly in
+Emacs versions prior to 24.1.50.1, so it cannot be enabled via
+the customization interface in versions earlier than that one. To
+ignore this warning and enable it regardless, set
+`undo-tree-auto-save-history' to a non-nil value outside of
+customize."
+  :group 'undo-tree
+  :type (if (version-list-< (version-to-list emacs-version) '(24 1 50 1))
+	    '(choice (const :tag "<disabled>" nil))
+	  'boolean))
 
 (defcustom undo-tree-incompatible-major-modes '(term-mode)
   "List of major-modes in which `undo-tree-mode' should not be enabled.
@@ -1005,7 +1032,8 @@ in visualizer."
                   (current root)
                   (size 0)
 		  (object-pool (make-hash-table :test 'eq :weakness 'value))))
-   (:copier nil))
+   ;;(:copier nil)
+   )
   root current size object-pool)
 
 
@@ -2300,11 +2328,22 @@ Within the undo-tree visualizer, the following keys are available:
   nil                       ; init value
   undo-tree-mode-lighter    ; lighter
   undo-tree-map             ; keymap
-  ;; if disabling `undo-tree-mode', rebuild `buffer-undo-list' from tree so
-  ;; Emacs undo can work
-  (unless undo-tree-mode
+
+  (cond
+   ;; if enabling `undo-tree-mode', set up history-saving hooks if
+   ;; `undo-tree-auto-save-history' is enabled
+   (undo-tree-mode
+    (when undo-tree-auto-save-history
+      (add-hook 'write-file-functions 'undo-tree-save-history-hook nil t)
+      (add-hook 'find-file-hook 'undo-tree-load-history-hook nil t)))
+   ;; if disabling `undo-tree-mode', rebuild `buffer-undo-list' from tree so
+   ;; Emacs undo can work
+   (t
     (undo-list-rebuild-from-tree)
-    (setq buffer-undo-tree nil)))
+    (setq buffer-undo-tree nil)
+    (when undo-tree-auto-save-history
+      (remove-hook 'write-file-functions 'undo-tree-save-history-hook t)
+      (remove-hook 'find-file-hook 'undo-tree-load-history-hook t)))))
 
 
 (defun turn-on-undo-tree-mode (&optional print-message)
@@ -2654,6 +2693,109 @@ Argument is a character, naming the register."
     (undo-list-transfer-to-tree)
     ;; restore buffer state corresponding to saved node
     (undo-tree-set node)))
+
+
+
+(defmacro undo-tree-history-save-file (file)
+  `(concat (file-name-directory ,file)
+	   "." (file-name-nondirectory ,file)
+	   ".~undo-tree"))
+
+
+(defun undo-tree-save-history (&optional filename overwrite)
+  "Store undo-tree history to file.
+
+If optional argument FILENAME is omitted, default save file is
+\".<buffer-file-name>.~undo-tree\" if buffer is visiting a file.
+Otherwise, prompt for one.
+
+If OVERWRITE is non-nil, any existing file will be overwritten
+without asking for confirmation."
+  (interactive)
+  (undo-list-transfer-to-tree)
+  (let ((buff (current-buffer))
+	(tree (copy-undo-tree buffer-undo-tree)))
+    ;; get filename
+    (unless filename
+      (setq filename
+	    (if buffer-file-name
+		(undo-tree-history-save-file buffer-file-name)
+	      (expand-file-name (read-file-name "File to save in: ") nil))))
+    (when (or (not (file-exists-p filename))
+	      overwrite
+	      (yes-or-no-p (format "Overwrite \"%s\"? " filename)))
+      ;; discard undo-tree object pool before saving
+      (setf (undo-tree-object-pool tree) nil)
+      ;; print undo-tree to file
+      (with-temp-file filename
+	(prin1 (sha1 buff) (current-buffer))
+	(terpri (current-buffer))
+	(let ((print-circle t)) (prin1 tree (current-buffer)))))))
+
+
+
+(defun undo-tree-load-history (&optional filename noerror)
+  "Load undo-tree history from file.
+
+If optional argument FILENAME is null, default load file is
+\".<buffer-file-name>.~undo-tree\" if buffer is visiting a file.
+Otherwise, prompt for one.
+
+If optional argument NOERROR is non-nil, return nil instead of
+signaling an error if file is not found."
+  (interactive)
+  ;; get filename
+  (unless filename
+    (setq filename
+	  (if buffer-file-name
+	      (undo-tree-history-save-file buffer-file-name)
+	    (expand-file-name (read-file-name "File to load from: ") nil))))
+
+  ;; attempt to read undo-tree from FILENAME
+  (catch 'load-error
+    (unless (file-exists-p filename)
+      (if noerror
+	  (throw 'load-error nil)
+	(error "File \"%s\" does not exist; could not load undo-tree history"
+	       filename)))
+    (let (buff tmp hash tree)
+      (setq buff (current-buffer))
+      (with-temp-buffer
+	(insert-file-contents filename)
+	(goto-char (point-min))
+	(condition-case nil
+	    (setq hash (read (current-buffer)))
+	  (error
+	   (kill-buffer nil)
+	   (funcall (if noerror 'message 'error)
+		    "Error reading undo-tree history from \"%s\"" filename)
+	   (throw 'load-error nil)))
+	(unless (string= (sha1 buff) hash)
+	  (kill-buffer nil)
+	  (funcall (if noerror 'message 'error)
+		   "Buffer has been modified; could not load undo-tree history")
+	  (throw 'load-error nil))
+	(condition-case nil
+	    (setq tree (read (current-buffer)))
+	  (error
+	   (kill-buffer nil)
+	   (funcall (if noerror 'message 'error)
+		    "Error reading undo-tree history from \"%s\"" filename)
+	   (throw 'load-error nil)))
+	(kill-buffer nil))
+      ;; initialise empty undo-tree object pool
+      (setf (undo-tree-object-pool tree)
+	    (make-hash-table :test 'eq :weakness 'value))
+      (setq buffer-undo-tree tree))))
+
+
+
+;; Versions of save/load functions for use in hooks
+(defun undo-tree-save-history-hook ()
+  (undo-tree-save-history nil t) nil)
+
+(defun undo-tree-load-history-hook ()
+  (undo-tree-load-history nil t))
 
 
 
