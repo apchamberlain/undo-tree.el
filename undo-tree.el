@@ -4,7 +4,7 @@
 ;; Copyright (C) 2009-2012 Toby Cubitt
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.3.4
+;; Version: 0.3.5
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Git Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -604,6 +604,11 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.3.5
+;; * improved `undo-tree-switch-branch': display current branch number in
+;;   prompt, switch to other branch without prompting when there are only two,
+;;   and display message indicating new branch number after switching
 ;;
 ;; Version 0.3.4
 ;; * set `permanent-local' property on `buffer-undo-tree', to prevent history
@@ -2558,10 +2563,18 @@ using `undo-tree-redo'."
   (interactive (list (or (and prefix-arg (prefix-numeric-value prefix-arg))
                          (and (not (eq buffer-undo-list t))
 			      (or (undo-list-transfer-to-tree) t)
-                              (> (undo-tree-num-branches) 1)
-                              (read-number
-                               (format "Branch (0-%d): "
-                                       (1- (undo-tree-num-branches))))))))
+			      (let ((b (undo-tree-node-branch
+					(undo-tree-current
+					 buffer-undo-tree))))
+				(cond
+				 ;; switch to other branch if only 2
+				 ((= (undo-tree-num-branches) 2) (- 1 b))
+				 ;; prompt if more than 2
+				 ((> (undo-tree-num-branches) 2)
+				  (read-number
+				   (format "Branch (0-%d, on %d): "
+					   (1- (undo-tree-num-branches)) b)))
+				 ))))))
   ;; throw error if undo is disabled in buffer
   (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
   ;; sanity check branch number
@@ -2572,7 +2585,8 @@ using `undo-tree-redo'."
   (undo-list-transfer-to-tree)
   ;; switch branch
   (setf (undo-tree-node-branch (undo-tree-current buffer-undo-tree))
-	branch))
+	branch)
+  (message "Switched to branch %d" branch))
 
 
 (defun undo-tree-set (node)
