@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.4
+;; Version: 0.5
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -446,10 +446,17 @@
 ;; history you are visualizing) is updated as you move around the undo tree in
 ;; the visualizer. If you reach a branch point in the visualizer, the usual
 ;; keys for moving forward and backward in a buffer instead switch branch
-;; (e.g. the left and right arrow keys, or "C-f" and "C-b"). And clicking with
-;; the mouse on any node in the visualizer will take you directly to that
-;; node, resetting the state of the parent buffer to the state represented by
-;; that node.
+;; (e.g. the left and right arrow keys, or "C-f" and "C-b").
+;;
+;; Clicking with the mouse on any node in the visualizer will take you
+;; directly to that node, resetting the state of the parent buffer to the
+;; state represented by that node.
+;;
+;; You can also select nodes directly using the keyboard, by hitting "s" to
+;; toggle selection mode. The usual motion keys now allow you to move around
+;; the tree without changing the parent buffer. Hitting <enter> will reset the
+;; state of the parent buffer to the state represented by the currently
+;; selected node.
 ;;
 ;; It can be useful to see how long ago the parent buffer was in the state
 ;; represented by a particular node in the visualizer. Hitting "t" in the
@@ -457,6 +464,11 @@
 ;; that, because of the way `undo-tree-mode' works, these time-stamps may be
 ;; somewhat later than the true times, especially if it's been a long time
 ;; since you last undid any changes.)
+;;
+;; To get some idea of what changes a node represents, it can be useful to see
+;; a diff between the states represented by a node and its parent (the node
+;; immediately above it in the tree).  Hit "d" in the visualizer to toggle the
+;; diff display.
 ;;
 ;; Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
 ;; whatever state you ended at.
@@ -604,6 +616,13 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.5
+;; * implemented diff display in visualizer, toggled on and off using
+;;   `undo-tree-visualizer-toggle-diff'
+;; * added `undo-tree-diff' to generate diff between current and previous undo
+;;   state, and `undo-tree-visualizer-update-diff' to update visualizer diff
+;;   display
+;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
 ;;   `undo-tree-load-history' save and restore an undo tree to file, enabling
@@ -744,6 +763,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl))
+(require 'diff)
 
 ;; `characterp' isn't defined in Emacs versions <= 22
 (unless (fboundp 'characterp)
@@ -864,6 +884,10 @@ in visualizer."
   "Non-nil when visualizer is displaying time-stamps.")
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
 
+(defvar undo-tree-visualizer-diff nil
+  "Non-nil when visualizer is displaying a diff.")
+(make-variable-buffer-local 'undo-tree-visualizer-diff)
+
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
 
 ;; dynamically bound to t when undoing from visualizer, to inhibit
@@ -943,6 +967,9 @@ in visualizer."
   ;; toggle timestamps
   (define-key undo-tree-visualizer-map "t"
     'undo-tree-visualizer-toggle-timestamps)
+  ;; toggle diff
+  (define-key undo-tree-visualizer-map "d"
+    'undo-tree-visualizer-toggle-diff)
   ;; selection mode
   (define-key undo-tree-visualizer-map "s"
     'undo-tree-visualizer-selection-mode)
@@ -3213,7 +3240,8 @@ Within the undo-tree visualizer, the following keys are available:
       (let ((undo-tree-inhibit-kill-visualizer t)) (undo-tree-undo arg))
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (let ((inhibit-read-only t))
-      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff))))
 
 
 (defun undo-tree-visualize-redo (&optional arg)
@@ -3229,7 +3257,8 @@ Within the undo-tree visualizer, the following keys are available:
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
     (let ((inhibit-read-only t))
-      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff))))
 
 
 (defun undo-tree-visualize-switch-branch-right (arg)
@@ -3275,9 +3304,13 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (unwind-protect
       (with-current-buffer undo-tree-visualizer-parent-buffer
 	(remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
+    ;; kill diff buffer, if any
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-toggle-diff))
     (let ((parent undo-tree-visualizer-parent-buffer)
 	  window)
+      ;; kill visualizer buffer
       (kill-buffer nil)
+      ;; switch back to parent buffer
       (if (setq window (get-buffer-window parent))
 	  (select-window window)
 	(switch-to-buffer parent)))))
@@ -3291,11 +3324,12 @@ at POS, or point if POS is nil."
   (let ((node (get-text-property pos 'undo-tree-node)))
     (when node
       ;; set parent buffer to state corresponding to node at POS
-      (set-buffer undo-tree-visualizer-parent-buffer)
+      (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
       (let ((undo-tree-inhibit-kill-visualizer t)) (undo-tree-set node))
-      (set-buffer undo-tree-visualizer-buffer-name)
+      (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
       ;; re-draw undo tree
-      (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))))
+      (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree))
+      (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))))
 
 
 (defun undo-tree-visualizer-mouse-set (pos)
@@ -3394,6 +3428,64 @@ at mouse event POS."
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) beg) (throw 'beg t)))))
     (goto-char (if node (undo-tree-node-marker node) pos))))
+
+
+
+
+;;; =====================================================================
+;;;                      Visualizer diff display
+
+(defun undo-tree-visualizer-toggle-diff ()
+  (interactive)
+  (cond
+   ;; hide diff
+   (undo-tree-visualizer-diff
+    (setq undo-tree-visualizer-diff nil)
+    (let ((win (get-buffer-window "*Diff")))
+      (when win (with-selected-window win (kill-buffer-and-window)))))
+   (t ;; show diff
+    (setq undo-tree-visualizer-diff t)
+    (let ((buff (with-current-buffer
+		    undo-tree-visualizer-parent-buffer
+		  (undo-tree-diff)))
+	  (win (split-window)))
+      (set-window-buffer win buff)
+      (shrink-window-if-larger-than-buffer win)))))
+
+
+(defun undo-tree-diff ()
+  ;; create diff between current and previous undo state; returns buffer
+  ;; containing diff
+  (let (tmpfile buff)
+    ;; generate diff
+    (let ((undo-tree-inhibit-kill-visualizer t))
+      (undo-tree-undo)
+      (setq tmpfile (diff-file-local-copy (current-buffer)))
+      (undo-tree-redo))
+    (setq buff (diff-no-select
+		tmpfile (current-buffer) "-u" 'noasync
+		(get-buffer-create "*Diff") ;(concat " *undo-tree-diff*")
+		))
+    ;; delete process messages from diff buffer
+    (with-current-buffer buff
+      (goto-char (point-min))
+      (delete-region (point) (1+ (line-end-position)))
+      (goto-char (point-max))
+      (forward-line -2)
+      (delete-region (point) (point-max))
+      (setq cursor-type nil)
+      (setq buffer-read-only t))
+    buff))
+
+
+(defun undo-tree-visualizer-update-diff ()
+  ;; update visualizer diff display
+  (with-current-buffer undo-tree-visualizer-parent-buffer
+    (undo-tree-diff))
+  (let ((win (get-buffer-window "*Diff")))
+    (when win
+      (balance-windows)
+      (shrink-window-if-larger-than-buffer win))))
 
 
 
