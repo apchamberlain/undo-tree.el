@@ -616,6 +616,8 @@
 ;;   `undo-tree-restore-state-from-register')
 ;; * suppress branch point messages when undo/redoing from `undo-tree-set'
 ;; * make various interactive commands signal an error if buffer is read-only
+;; * let-bind `inhibit-read-only' instead of setting and restoring
+;;   `buffer-read-only'
 ;;
 ;; Version 0.3.5
 ;; * improved `undo-tree-switch-branch': display current branch number in
@@ -2855,9 +2857,7 @@ signaling an error if file is not found."
     (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
-    (setq buffer-read-only nil)
-    (undo-tree-draw-tree undo-tree)
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
 
 
 (defun undo-tree-kill-visualizer (&rest dummy)
@@ -3197,23 +3197,23 @@ Within the undo-tree visualizer, the following keys are available:
 (defun undo-tree-visualize-undo (&optional arg)
   "Undo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
-  (setq buffer-read-only nil)
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
+	(inhibit-read-only t))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
   (deactivate-mark)
   (unwind-protect
       (undo-tree-undo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
-    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))))
 
 
 (defun undo-tree-visualize-redo (&optional arg)
   "Redo changes. A numeric ARG serves as a repeat count."
   (interactive "p")
-  (setq buffer-read-only nil)
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face)
+	(inhibit-read-only t))
     (undo-tree-draw-node (undo-tree-current buffer-undo-tree)))
   (switch-to-buffer-other-window undo-tree-visualizer-parent-buffer)
   (deactivate-mark)
@@ -3221,8 +3221,8 @@ Within the undo-tree visualizer, the following keys are available:
       (undo-tree-redo arg)
     (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
     (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t))
+      (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))))
 
 
 (defun undo-tree-visualize-switch-branch-right (arg)
@@ -3231,9 +3231,9 @@ This will affect which branch to descend when *redoing* changes
 using `undo-tree-redo' or `undo-tree-visualizer-redo'."
   (interactive "p")
   ;; un-highlight old active branch below current node
-  (setq buffer-read-only nil)
   (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face))
+  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
+	(inhibit-read-only t))
     (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
   ;; increment branch
   (let ((branch (undo-tree-node-branch (undo-tree-current buffer-undo-tree))))
@@ -3243,13 +3243,13 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
           (1- (undo-tree-num-branches)))
          ((<= (+ branch arg) 0) 0)
          (t (+ branch arg))))
-  ;; highlight new active branch below current node
-  (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
-    (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
-  ;; re-highlight current node
-  (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current)
-  (setq buffer-read-only t)))
+  (let ((inhibit-read-only t))
+    ;; highlight new active branch below current node
+    (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+      (undo-tree-highlight-active-branch (undo-tree-current buffer-undo-tree)))
+    ;; re-highlight current node
+    (undo-tree-draw-node (undo-tree-current buffer-undo-tree) 'current))))
 
 
 (defun undo-tree-visualize-switch-branch-left (arg)
@@ -3287,10 +3287,8 @@ at POS, or point if POS is nil."
       (set-buffer undo-tree-visualizer-parent-buffer)
       (undo-tree-set node)
       (set-buffer undo-tree-visualizer-buffer-name)
-      (setq buffer-read-only nil)
       ;; re-draw undo tree
-      (undo-tree-draw-tree buffer-undo-tree)
-      (setq buffer-read-only t))))
+      (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))))
 
 
 (defun undo-tree-visualizer-mouse-set (pos)
@@ -3310,9 +3308,7 @@ at mouse event POS."
             (max 13 (default-value 'undo-tree-visualizer-spacing))
           (default-value 'undo-tree-visualizer-spacing)))
   ;; redraw tree
-  (setq buffer-read-only nil)
-  (undo-tree-draw-tree buffer-undo-tree)
-  (setq buffer-read-only t))
+  (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))
 
 
 (defun undo-tree-visualizer-scroll-left (&optional arg)
