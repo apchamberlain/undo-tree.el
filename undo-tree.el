@@ -614,6 +614,7 @@
 ;; * create proper registerv structure using `registerv-make' when storing
 ;;   undo state in registers in `undo-tree-save-state-to-register' (and
 ;;   `undo-tree-restore-state-from-register')
+;; * suppress branch point messages when undo/redoing from `undo-tree-set'
 ;;
 ;; Version 0.3.5
 ;; * improved `undo-tree-switch-branch': display current branch number in
@@ -2514,7 +2515,9 @@ undoing."
     ;; undo deactivates mark unless undoing-in-region
     (setq deactivate-mark (not undo-in-region))
     ;; inform user if at branch point
-    (when (> (undo-tree-num-branches) 1) (message "Undo branch point!"))))
+    (when (and (called-interactively-p 'interactive)
+	       (> (undo-tree-num-branches) 1))
+      (message "Undo branch point!"))))
 
 
 
@@ -2612,7 +2615,9 @@ redoing."
     ;; redo deactivates the mark unless redoing-in-region
     (setq deactivate-mark (not redo-in-region))
     ;; inform user if at branch point
-    (when (> (undo-tree-num-branches) 1) (message "Undo branch point!"))))
+    (when (and (called-interactively-p 'interactive)
+	       (> (undo-tree-num-branches) 1))
+      (message "Undo branch point!"))))
 
 
 
