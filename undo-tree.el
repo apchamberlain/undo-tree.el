@@ -630,9 +630,9 @@
 ;;   `undo-tree-visualizer-toggle-diff'
 ;; * added `undo-tree-visualizer-diff' customization option, to display diff
 ;;   by default
-;; * added `called-interactively-p' compatibility hack for Emacs <= 23.1
-;; * added `registerv-make' and `registerv-data' compatibility hacks for
-;;   Emacs <= 23
+;; * added `called-interactively-p', `registerv-make', `registerv-data',
+;;   `diff-no-select' and `diff-file-local-copy' compatibility hacks for
+;;   older Emacsen
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -777,11 +777,15 @@
 (require 'diff)
 
 
-;; `characterp' isn't defined in Emacs versions <= 22
+
+;;; =====================================================================
+;;;              Compatibility hacks for older Emacsen
+
+;; `characterp' isn't defined in Emacs versions < 23
 (unless (fboundp 'characterp)
   (defalias 'characterp 'char-valid-p))
 
-;; `region-active-p' isn't defined in Emacs versions <= 22
+;; `region-active-p' isn't defined in Emacs versions < 23
 (unless (fboundp 'region-active-p)
   (defun region-active-p () (and transient-mark-mode mark-active)))
 
@@ -795,11 +799,84 @@
     (around undo-tree (&optional kind) activate compile preactivate)
     ad-do-it)1)
 
-;; `registerv' defstruct isn't defined in Emacs versions <= 23
+
+;; `registerv' defstruct isn't defined in Emacs versions < 24
 (unless (fboundp 'registerv-make)
   (defmacro registerv-make (data &rest dummy) data))
+
 (unless (fboundp 'registerv-data)
   (defmacro registerv-data (data) data))
+
+
+;; `diff-no-select' and `diff-file-local-copy' aren't defined in Emacs
+;; versions < 24 (copied and adapted from Emacs 24)
+(unless (fboundp 'diff-no-select)
+  (defun diff-no-select (old new &optional switches no-async buf)
+    ;; Noninteractive helper for creating and reverting diff buffers
+    (unless (bufferp new) (setq new (expand-file-name new)))
+    (unless (bufferp old) (setq old (expand-file-name old)))
+    (or switches (setq switches diff-switches)) ; If not specified, use default.
+    (unless (listp switches) (setq switches (list switches)))
+    (or buf (setq buf (get-buffer-create "*Diff*")))
+    (let* ((old-alt (diff-file-local-copy old))
+	   (new-alt (diff-file-local-copy new))
+	   (command
+	    (mapconcat 'identity
+		       `(,diff-command
+			 ;; Use explicitly specified switches
+			 ,@switches
+			 ,@(mapcar #'shell-quote-argument
+				   (nconc
+				    (when (or old-alt new-alt)
+				      (list "-L" (if (stringp old)
+						     old (prin1-to-string old))
+					    "-L" (if (stringp new)
+						     new (prin1-to-string new))))
+				    (list (or old-alt old)
+					  (or new-alt new)))))
+		       " "))
+	   (thisdir default-directory))
+      (with-current-buffer buf
+	(setq buffer-read-only t)
+	(buffer-disable-undo (current-buffer))
+	(let ((inhibit-read-only t))
+	  (erase-buffer))
+	(buffer-enable-undo (current-buffer))
+	(diff-mode)
+	(set (make-local-variable 'revert-buffer-function)
+	     (lambda (_ignore-auto _noconfirm)
+	       (diff-no-select old new switches no-async (current-buffer))))
+	(setq default-directory thisdir)
+	(let ((inhibit-read-only t))
+	  (insert command "\n"))
+	(if (and (not no-async) (fboundp 'start-process))
+	    (let ((proc (start-process "Diff" buf shell-file-name
+				       shell-command-switch command)))
+	      (set-process-filter proc 'diff-process-filter)
+	      (set-process-sentinel
+	       proc (lambda (proc _msg)
+		      (with-current-buffer (process-buffer proc)
+			(diff-sentinel (process-exit-status proc))
+			(if old-alt (delete-file old-alt))
+			(if new-alt (delete-file new-alt))))))
+	  ;; Async processes aren't available.
+	  (let ((inhibit-read-only t))
+	    (diff-sentinel
+	     (call-process shell-file-name nil buf nil
+			   shell-command-switch command))
+	    (if old-alt (delete-file old-alt))
+	    (if new-alt (delete-file new-alt)))))
+      buf)))
+
+(unless (fboundp 'diff-file-local-copy)
+  (defun diff-file-local-copy (file-or-buf)
+    (if (bufferp file-or-buf)
+	(with-current-buffer file-or-buf
+	  (let ((tempfile (make-temp-file "buffer-content-")))
+	    (write-region nil nil tempfile nil 'nomessage)
+	    tempfile))
+      (file-local-copy file-or-buf))))
+
 
 
 
