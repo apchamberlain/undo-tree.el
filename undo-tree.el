@@ -465,10 +465,15 @@
 ;; somewhat later than the true times, especially if it's been a long time
 ;; since you last undid any changes.)
 ;;
-;; To get some idea of what changes a node represents, it can be useful to see
-;; a diff between the states represented by a node and its parent (the node
-;; immediately above it in the tree).  Hit "d" in the visualizer to toggle the
-;; diff display.
+;; To get some idea of what changes are represented by a given node in the
+;; tree, it can be useful to see a diff of the changes. Hit "d" in the
+;; visualizer to toggle a diff display. This normally displays a diff between
+;; the current state and the previous one, i.e. it shows you the changes that
+;; will be applied if you undo (move up the tree). However, the diff display
+;; really comes into its own in the visualizer's selection mode (see above),
+;; where it instead shows a diff between the current state and the currently
+;; selected state, i.e. it shows you the changes that will be applied if you
+;; reset to the selected state.
 ;;
 ;; Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
 ;; whatever state you ended at.
@@ -618,10 +623,11 @@
 ;;
 ;; Version 0.5
 ;; * implemented diff display in visualizer, toggled on and off using
-;;   `undo-tree-visualizer-toggle-diff'
-;; * added `undo-tree-diff' to generate diff between current and previous undo
-;;   state, and `undo-tree-visualizer-update-diff' to update visualizer diff
-;;   display
+;;   `undo-tree-visualizer-toggle-diff' and
+;;   `undo-tree-visualizer-selection-toggle-diff' in the visualizer.
+;; * added `undo-tree-diff' to generate diff between the current state and
+;;   given state, and `undo-tree-visualizer-update-diff' to update visualizer
+;;   diff display
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -1050,6 +1056,9 @@ in visualizer."
   ;; toggle timestamps
   (define-key undo-tree-visualizer-selection-map "t"
     'undo-tree-visualizer-toggle-timestamps)
+  ;; toggle diff
+  (define-key undo-tree-visualizer-selection-map "d"
+    'undo-tree-visualizer-selection-toggle-diff)
   ;; quit visualizer selection mode
   (define-key undo-tree-visualizer-selection-map "s"
     'undo-tree-visualizer-mode)
@@ -3384,7 +3393,9 @@ at mouse event POS."
       (dotimes (i arg)
 	(unless (undo-tree-node-previous node) (throw 'top t))
 	(setq node (undo-tree-node-previous node))))
-    (goto-char (undo-tree-node-marker node))))
+    (goto-char (undo-tree-node-marker node))
+    (when undo-tree-visualizer-diff
+      (undo-tree-visualizer-update-diff node))))
 
 
 (defun undo-tree-visualizer-select-next (&optional arg)
@@ -3397,7 +3408,9 @@ at mouse event POS."
 	  (throw 'bottom t))
 	(setq node
 	      (nth (undo-tree-node-branch node) (undo-tree-node-next node)))))
-    (goto-char (undo-tree-node-marker node))))
+    (goto-char (undo-tree-node-marker node))
+    (when undo-tree-visualizer-diff
+      (undo-tree-visualizer-update-diff node))))
 
 
 (defun undo-tree-visualizer-select-right (&optional arg)
@@ -3412,7 +3425,9 @@ at mouse event POS."
 	  (forward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) end) (throw 'end t)))))
-    (goto-char (if node (undo-tree-node-marker node) pos))))
+    (goto-char (if node (undo-tree-node-marker node) pos))
+    (when (and undo-tree-visualizer-diff node)
+      (undo-tree-visualizer-update-diff node))))
 
 
 (defun undo-tree-visualizer-select-left (&optional arg)
@@ -3427,15 +3442,17 @@ at mouse event POS."
 	  (backward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) beg) (throw 'beg t)))))
-    (goto-char (if node (undo-tree-node-marker node) pos))))
-
+    (goto-char (if node (undo-tree-node-marker node) pos))
+    (when (and undo-tree-visualizer-diff node)
+      (undo-tree-visualizer-update-diff node))))
 
 
 
 ;;; =====================================================================
 ;;;                      Visualizer diff display
 
-(defun undo-tree-visualizer-toggle-diff ()
+(defun undo-tree-visualizer-toggle-diff (&optional node)
+  "Toggle diff display in undo-tree visualizer."
   (interactive)
   (cond
    ;; hide diff
@@ -3445,25 +3462,33 @@ at mouse event POS."
       (when win (with-selected-window win (kill-buffer-and-window)))))
    (t ;; show diff
     (setq undo-tree-visualizer-diff t)
-    (let ((buff (with-current-buffer
-		    undo-tree-visualizer-parent-buffer
-		  (undo-tree-diff)))
+    (let ((buff (with-current-buffer undo-tree-visualizer-parent-buffer
+		  (undo-tree-diff node)))
 	  (win (split-window)))
       (set-window-buffer win buff)
       (shrink-window-if-larger-than-buffer win)))))
 
 
-(defun undo-tree-diff ()
-  ;; create diff between current and previous undo state; returns buffer
-  ;; containing diff
+(defun undo-tree-visualizer-selection-toggle-diff (&optional pos)
+  "Toggle diff display in undo-tree visualizer selection mode."
+  (interactive)
+  (unless pos (setq pos (point)))
+  (let ((node (get-text-property pos 'undo-tree-node)))
+    (when node (undo-tree-visualizer-toggle-diff node))))
+
+
+(defun undo-tree-diff (&optional node)
+  ;; Create diff between current state and NODE (or previous state, if NODE is
+  ;; null). Returns buffer containing diff.
   (let (tmpfile buff)
     ;; generate diff
-    (let ((undo-tree-inhibit-kill-visualizer t))
-      (undo-tree-undo)
+    (let ((undo-tree-inhibit-kill-visualizer t)
+	  (current (undo-tree-current buffer-undo-tree)))
+      (undo-tree-set (or node (undo-tree-node-previous current)))
       (setq tmpfile (diff-file-local-copy (current-buffer)))
-      (undo-tree-redo))
+      (undo-tree-set current))
     (setq buff (diff-no-select
-		tmpfile (current-buffer) "-u" 'noasync
+		(current-buffer) tmpfile "-u" 'noasync
 		(get-buffer-create "*Diff") ;(concat " *undo-tree-diff*")
 		))
     ;; delete process messages from diff buffer
@@ -3478,10 +3503,11 @@ at mouse event POS."
     buff))
 
 
-(defun undo-tree-visualizer-update-diff ()
-  ;; update visualizer diff display
+(defun undo-tree-visualizer-update-diff (&optional node)
+  ;; update visualizer diff display to show diff between current state and
+  ;; NODE (or previous state, if NODE is null)
   (with-current-buffer undo-tree-visualizer-parent-buffer
-    (undo-tree-diff))
+    (undo-tree-diff node))
   (let ((win (get-buffer-window "*Diff")))
     (when win
       (balance-windows)
