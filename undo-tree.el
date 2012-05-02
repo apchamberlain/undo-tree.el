@@ -911,6 +911,7 @@ in visualizer."
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
 
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
+(defconst undo-tree-diff-buffer-name "*undo-tree Diff*")
 
 ;; dynamically bound to t when undoing from visualizer, to inhibit
 ;; `undo-tree-kill-visualizer' hook function in parent buffer
@@ -3403,7 +3404,7 @@ at mouse event POS."
   (setq cursor-type 'box)
   ;; erase diff (if any), as initially selected node is identical to current
   (when undo-tree-visualizer-diff
-    (let ((buff (get-buffer "*Diff"))
+    (let ((buff (get-buffer undo-tree-diff-buffer-name))
 	  (inhibit-read-only t))
       (when buff (with-current-buffer buff (erase-buffer))))))
 
@@ -3506,7 +3507,7 @@ at mouse event POS."
 (defun undo-tree-visualizer-hide-diff ()
   ;; hide visualizer diff display
   (setq undo-tree-visualizer-diff nil)
-  (let ((win (get-buffer-window "*Diff")))
+  (let ((win (get-buffer-window undo-tree-diff-buffer-name)))
     (when win (with-selected-window win (kill-buffer-and-window)))))
 
 
@@ -3522,8 +3523,7 @@ at mouse event POS."
       (undo-tree-set current))
     (setq buff (diff-no-select
 		(current-buffer) tmpfile nil 'noasync
-		(get-buffer-create "*Diff") ;(concat " *undo-tree-diff*")
-		))
+		(get-buffer-create undo-tree-diff-buffer-name)))
     ;; delete process messages and useless headers from diff buffer
     (with-current-buffer buff
       (goto-char (point-min))
@@ -3541,7 +3541,7 @@ at mouse event POS."
   ;; NODE (or previous state, if NODE is null)
   (with-current-buffer undo-tree-visualizer-parent-buffer
     (undo-tree-diff node))
-  (let ((win (get-buffer-window "*Diff")))
+  (let ((win (get-buffer-window undo-tree-diff-buffer-name)))
     (when win
       (balance-windows)
       (shrink-window-if-larger-than-buffer win))))
