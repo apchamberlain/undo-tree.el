@@ -627,11 +627,10 @@
 ;;
 ;; Version 0.5
 ;; * implemented diff display in visualizer, toggled on and off using
-;;   `undo-tree-visualizer-toggle-diff' and
-;;   `undo-tree-visualizer-selection-toggle-diff' in the visualizer.
-;; * added `undo-tree-diff' to generate diff between the current state and
-;;   given state, and `undo-tree-visualizer-update-diff' to update visualizer
-;;   diff display
+;;   `undo-tree-visualizer-toggle-diff'
+;; * added `undo-tree-visualizer-diff' customization option, to display diff
+;;   by default
+;; * added `called-interactively-p' compatibility hack for Emacs <= 23.1
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -782,6 +781,16 @@
 ;; `region-active-p' isn't defined in Emacs versions <= 22
 (unless (fboundp 'region-active-p)
   (defun region-active-p () (and transient-mark-mode mark-active)))
+
+;; `called-interactively-p' doesn't take an argument in Emacs <= 22, but
+;; *requires* an argument in Emacs >= 23.1 (thus forcing us to use around
+;; advice if we want to avoid changing the main code)
+(when (or (<= emacs-major-version 22)
+	  (and (= emacs-major-version 23)
+	       (<= emacs-minor-version 21)))
+  (defadvice called-interactively-p
+    (around undo-tree (&optional kind) activate compile preactivate)
+    ad-do-it)1)
 
 
 
