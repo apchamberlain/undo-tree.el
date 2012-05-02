@@ -631,6 +631,8 @@
 ;; * added `undo-tree-visualizer-diff' customization option, to display diff
 ;;   by default
 ;; * added `called-interactively-p' compatibility hack for Emacs <= 23.1
+;; * added `registerv-make' and `registerv-data' compatibility hacks for
+;;   Emacs <= 23
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -774,6 +776,7 @@
 (eval-when-compile (require 'cl))
 (require 'diff)
 
+
 ;; `characterp' isn't defined in Emacs versions <= 22
 (unless (fboundp 'characterp)
   (defalias 'characterp 'char-valid-p))
@@ -791,6 +794,12 @@
   (defadvice called-interactively-p
     (around undo-tree (&optional kind) activate compile preactivate)
     ad-do-it)1)
+
+;; `registerv' defstruct isn't defined in Emacs versions <= 23
+(unless (fboundp 'registerv-make)
+  (defmacro registerv-make (data &rest dummy) data))
+(unless (fboundp 'registerv-data)
+  (defmacro registerv-data (data) data))
 
 
 
