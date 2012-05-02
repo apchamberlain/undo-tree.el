@@ -804,15 +804,6 @@ when `undo-tree-mode' is enabled."
   :group 'undo-tree
   :type 'string)
 
-(defcustom undo-tree-enable-undo-in-region t
-  "When non-nil, enable undo-in-region.
-
-When undo-in-region is enabled, undoing or redoing when the
-region is active (in `transient-mark-mode') or with a prefix
-argument (not in `transient-mark-mode') only undoes changes
-within the current region."
-  :group 'undo-tree
-  :type 'boolean)
 
 (defcustom undo-tree-auto-save-history nil
   "When non-nil, `undo-tree-mode' will save undo history to file
@@ -836,11 +827,35 @@ customize."
 	    '(choice (const :tag "<disabled>" nil))
 	  'boolean))
 
+
+(defcustom undo-tree-visualizer-diff nil
+  "When non-nil, display diff by default in undo-tree visualizer.
+
+\\<undo-tree-visualizer-map>You can always toggle the diff display \
+using \\[undo-tree-visualizer-toggle-diff], regardless of the
+setting of this variable."
+  :group 'undo-tree
+  :type 'boolean)
+(make-variable-buffer-local 'undo-tree-visualizer-diff)
+
+
 (defcustom undo-tree-incompatible-major-modes '(term-mode)
   "List of major-modes in which `undo-tree-mode' should not be enabled.
 \(See `turn-on-undo-tree-mode'.\)"
   :group 'undo-tree
   :type '(repeat symbol))
+
+
+(defcustom undo-tree-enable-undo-in-region t
+  "When non-nil, enable undo-in-region.
+
+When undo-in-region is enabled, undoing or redoing when the
+region is active (in `transient-mark-mode') or with a prefix
+argument (not in `transient-mark-mode') only undoes changes
+within the current region."
+  :group 'undo-tree
+  :type 'boolean)
+
 
 (defcustom undo-tree-visualizer-spacing 3
   "Horizontal spacing in undo-tree visualization.
@@ -849,9 +864,6 @@ Must be a postivie odd integer."
   :type '(integer
           :match (lambda (w n) (and (integerp n) (> n 0) (= (mod n 2) 1)))))
 (make-variable-buffer-local 'undo-tree-visualizer-spacing)
-
-(defvar undo-tree-map nil
-  "Keymap used in undo-tree-mode.")
 
 
 (defface undo-tree-visualizer-default-face
@@ -879,6 +891,10 @@ in visualizer."
 in visualizer."
   :group 'undo-tree)
 
+
+(defvar undo-tree-map nil
+  "Keymap used in undo-tree-mode.")
+
 (defvar undo-tree-visualizer-map nil
   "Keymap used in undo-tree visualizer.")
 
@@ -893,10 +909,6 @@ in visualizer."
 (defvar undo-tree-visualizer-timestamps nil
   "Non-nil when visualizer is displaying time-stamps.")
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
-
-(defvar undo-tree-visualizer-diff nil
-  "Non-nil when visualizer is displaying a diff.")
-(make-variable-buffer-local 'undo-tree-visualizer-diff)
 
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
 
@@ -2901,9 +2913,10 @@ signaling an error if file is not found."
 	(display-buffer-mark-dedicated 'soft))
     (switch-to-buffer-other-window
      (get-buffer-create undo-tree-visualizer-buffer-name))
-    (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
+    (undo-tree-visualizer-mode)
     (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
 
 
@@ -3237,7 +3250,8 @@ Within the undo-tree visualizer, the following keys are available:
   (use-local-map undo-tree-visualizer-map)
   (setq truncate-lines t)
   (setq cursor-type nil)
-  (setq buffer-read-only t))
+  (setq buffer-read-only t)
+  (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))
 
 
 
@@ -3318,7 +3332,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
       (with-current-buffer undo-tree-visualizer-parent-buffer
 	(remove-hook 'before-change-functions 'undo-tree-kill-visualizer t))
     ;; kill diff buffer, if any
-    (when undo-tree-visualizer-diff (undo-tree-visualizer-toggle-diff))
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-hide-diff))
     (let ((parent undo-tree-visualizer-parent-buffer)
 	  window)
       ;; kill visualizer buffer
@@ -3386,7 +3400,12 @@ at mouse event POS."
   (setq major-mode 'undo-tree-visualizer-selection-mode)
   (setq mode-name "undo-tree-visualizer-selection-mode")
   (use-local-map undo-tree-visualizer-selection-map)
-  (setq cursor-type 'box))
+  (setq cursor-type 'box)
+  ;; erase diff (if any), as initially selected node is identical to current
+  (when undo-tree-visualizer-diff
+    (let ((buff (get-buffer "*Diff"))
+	  (inhibit-read-only t))
+      (when buff (with-current-buffer buff (erase-buffer))))))
 
 
 (defun undo-tree-visualizer-select-previous (&optional arg)
@@ -3455,30 +3474,40 @@ at mouse event POS."
 ;;; =====================================================================
 ;;;                      Visualizer diff display
 
-(defun undo-tree-visualizer-toggle-diff (&optional node)
+(defun undo-tree-visualizer-toggle-diff ()
   "Toggle diff display in undo-tree visualizer."
   (interactive)
-  (cond
-   ;; hide diff
-   (undo-tree-visualizer-diff
-    (setq undo-tree-visualizer-diff nil)
-    (let ((win (get-buffer-window "*Diff")))
-      (when win (with-selected-window win (kill-buffer-and-window)))))
-   (t ;; show diff
-    (setq undo-tree-visualizer-diff t)
-    (let ((buff (with-current-buffer undo-tree-visualizer-parent-buffer
-		  (undo-tree-diff node)))
-	  (win (split-window)))
-      (set-window-buffer win buff)
-      (shrink-window-if-larger-than-buffer win)))))
+  (if undo-tree-visualizer-diff
+      (undo-tree-visualizer-hide-diff)
+    (undo-tree-visualizer-show-diff)))
 
 
-(defun undo-tree-visualizer-selection-toggle-diff (&optional pos)
+(defun undo-tree-visualizer-selection-toggle-diff ()
   "Toggle diff display in undo-tree visualizer selection mode."
   (interactive)
-  (unless pos (setq pos (point)))
-  (let ((node (get-text-property pos 'undo-tree-node)))
-    (when node (undo-tree-visualizer-toggle-diff node))))
+  (if undo-tree-visualizer-diff
+      (undo-tree-visualizer-hide-diff)
+    (let ((node (get-text-property (point) 'undo-tree-node)))
+      (when node (undo-tree-visualizer-show-diff node)))))
+
+
+(defun undo-tree-visualizer-show-diff (&optional node)
+  ;; show visualizer diff display
+  (setq undo-tree-visualizer-diff t)
+  (let ((buff (with-current-buffer undo-tree-visualizer-parent-buffer
+		(undo-tree-diff node)))
+	(display-buffer-mark-dedicated 'soft)
+	win)
+    (setq win (split-window))
+    (set-window-buffer win buff)
+    (shrink-window-if-larger-than-buffer win)))
+
+
+(defun undo-tree-visualizer-hide-diff ()
+  ;; hide visualizer diff display
+  (setq undo-tree-visualizer-diff nil)
+  (let ((win (get-buffer-window "*Diff")))
+    (when win (with-selected-window win (kill-buffer-and-window)))))
 
 
 (defun undo-tree-diff (&optional node)
