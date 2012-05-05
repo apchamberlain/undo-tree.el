@@ -637,6 +637,9 @@
 ;;   `undo-tree-undo-1' and `undo-tree-redo-1' functions, which now take an
 ;;   additional optional argument to preserve timestamps
 ;; * preserve timestamps when generating diff for visualizer diff view
+;; * fixed bug in `undo-tree-visualizer-select-left' and
+;;   `undo-tree-visualizer-select-right' when using selection mode whilst
+;;   timestamps are displayed
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -3557,16 +3560,18 @@ at mouse event POS."
   (interactive "p")
   (let ((pos (point))
 	(end (line-end-position))
+	(current (get-text-property (point) 'undo-tree-node))
 	node)
     (catch 'end
       (dotimes (i arg)
-	(while (not node)
+	(while (or (null node) (eq node current))
 	  (forward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) end) (throw 'end t)))))
-    (goto-char (if node (undo-tree-node-marker node) pos))
-    (when (and undo-tree-visualizer-diff node)
-      (undo-tree-visualizer-update-diff node))))
+    (unless (eq node current)
+      (goto-char (if node (undo-tree-node-marker node) pos))
+      (when (and undo-tree-visualizer-diff node)
+	(undo-tree-visualizer-update-diff node)))))
 
 
 (defun undo-tree-visualizer-select-left (&optional arg)
@@ -3574,16 +3579,18 @@ at mouse event POS."
   (interactive "p")
   (let ((pos (point))
 	(beg (line-beginning-position))
+	(current (get-text-property (point) 'undo-tree-node))
 	node)
     (catch 'beg
       (dotimes (i arg)
-	(while (not node)
+	(while (or (null node) (eq node current))
 	  (backward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) beg) (throw 'beg t)))))
-    (goto-char (if node (undo-tree-node-marker node) pos))
-    (when (and undo-tree-visualizer-diff node)
-      (undo-tree-visualizer-update-diff node))))
+    (unless (eq node current)
+      (goto-char (if node (undo-tree-node-marker node) pos))
+      (when (and undo-tree-visualizer-diff node)
+	(undo-tree-visualizer-update-diff node)))))
 
 
 
