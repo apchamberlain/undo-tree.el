@@ -3107,7 +3107,9 @@ signaling an error if file is not found."
 
   (let ((register (undo-tree-node-register node))
 	node-string)
-    (unless (and register (eq node (get-register register)))
+    (unless (and register
+		 (eq node (undo-tree-register-data-node
+			   (registerv-data (get-register register)))))
       (setq register nil))
     ;; represent node by differentl symbols, depending on whether it's the
     ;; current node or is saved in a register
