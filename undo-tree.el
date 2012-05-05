@@ -640,6 +640,10 @@
 ;; * fixed bug in `undo-tree-visualizer-select-left' and
 ;;   `undo-tree-visualizer-select-right' when using selection mode whilst
 ;;   timestamps are displayed
+;; * fixed bug in `undo-tree-draw-node' caused by new registerv structure,
+;;   which prevented registers from being displayed in visualizer
+;; * added `undo-tree-visualizer-relative-timestamps' option to make
+;;   visualizer  display timestamps relative to current time
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -930,6 +934,15 @@ customize."
 	  'boolean))
 
 
+(defcustom undo-tree-visualizer-relative-timestamps t
+  "When non-nil, display times relative to current time
+when displaying time stamps in visualizer.
+
+Otherwise, display absolute times."
+  :group 'undo-tree
+  :type 'boolean)
+
+
 (defcustom undo-tree-visualizer-diff nil
   "When non-nil, display diff by default in undo-tree visualizer.
 
@@ -957,15 +970,6 @@ argument (not in `transient-mark-mode') only undoes changes
 within the current region."
   :group 'undo-tree
   :type 'boolean)
-
-
-(defcustom undo-tree-visualizer-spacing 3
-  "Horizontal spacing in undo-tree visualization.
-Must be a postivie odd integer."
-  :group 'undo-tree
-  :type '(integer
-          :match (lambda (w n) (and (integerp n) (> n 0) (= (mod n 2) 1)))))
-(make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
 
 (defface undo-tree-visualizer-default-face
@@ -1011,6 +1015,10 @@ in visualizer."
 (defvar undo-tree-visualizer-timestamps nil
   "Non-nil when visualizer is displaying time-stamps.")
 (make-variable-buffer-local 'undo-tree-visualizer-timestamps)
+
+(defvar undo-tree-visualizer-spacing 3
+  "Horizontal spacing needed for drawing undo-tree in visualizer.")
+(make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
 (defconst undo-tree-diff-buffer-name "*undo-tree Diff*")
@@ -3059,8 +3067,10 @@ signaling an error if file is not found."
    (max (/ (window-width) 2)
         (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
            ;; add space for left part of left-most time-stamp
-           (if undo-tree-visualizer-timestamps 4 0)
-           2)))                ; left margin
+           (if undo-tree-visualizer-timestamps
+	       (/ (- undo-tree-visualizer-spacing 4) 2)
+	     0)
+           2)))  ; left margin
   ;; draw undo-tree
   (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
         (stack (list (undo-tree-root undo-tree)))
@@ -3103,7 +3113,8 @@ signaling an error if file is not found."
 (defun undo-tree-draw-node (node &optional current)
   ;; Draw symbol representing NODE in visualizer.
   (goto-char (undo-tree-node-marker node))
-  (when undo-tree-visualizer-timestamps (backward-char 5))
+  (when undo-tree-visualizer-timestamps
+    (backward-char (/ undo-tree-visualizer-spacing 2)))
 
   (let ((register (undo-tree-node-register node))
 	node-string)
@@ -3116,15 +3127,13 @@ signaling an error if file is not found."
     (setq node-string
 	  (cond
 	   (undo-tree-visualizer-timestamps
-	    (undo-tree-timestamp-to-string (undo-tree-node-timestamp node)))
+	    (undo-tree-timestamp-to-string
+	     (undo-tree-node-timestamp node)
+	     undo-tree-visualizer-relative-timestamps
+	     current register))
 	   (current "x")
 	   (register (char-to-string register))
 	   (t "o")))
-    (when undo-tree-visualizer-timestamps
-      (setq node-string
-	    (concat (if current "*" " ") node-string
-		    (if register (concat "(" (char-to-string register) ")")
-		      "   "))))
 
     (cond
      (current
@@ -3145,11 +3154,11 @@ signaling an error if file is not found."
         (undo-tree-insert node-string)))
      (t (undo-tree-insert node-string)))
 
-    (backward-char (if undo-tree-visualizer-timestamps 7 1))
+    (backward-char (if undo-tree-visualizer-timestamps
+		       (1+ (/ undo-tree-visualizer-spacing 2))
+		     1))
     (move-marker (undo-tree-node-marker node) (point))
-    (put-text-property (- (point) (if undo-tree-visualizer-timestamps 3 0))
-                       (+ (point) (if undo-tree-visualizer-timestamps 5 1))
-                       'undo-tree-node node)))
+    (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
 
 
 (defun undo-tree-draw-subtree (node &optional active-branch)
@@ -3342,10 +3351,48 @@ signaling an error if file is not found."
       (insert (make-string (- arg n) ? )))))
 
 
-(defun undo-tree-timestamp-to-string (timestamp)
-  ;; Convert TIMESTAMP to hh:mm:ss string.
-  (let ((time (decode-time timestamp)))
-    (format "%02d:%02d:%02d" (nth 2 time) (nth 1 time) (nth 0 time))))
+(defun undo-tree-timestamp-to-string
+  (timestamp &optional relative current register)
+  ;; Convert TIMESTAMP to string (either absolute or RELATVE time), indicating
+  ;; if it's the CURRENT node and/or has an associated REGISTER.
+  (if relative
+      ;; relative time
+      (let ((time (floor (float-time
+			  (subtract-time (current-time) timestamp))))
+	    n)
+	(setq time
+	      ;; years
+	      (if (> (setq n (/ time 315360000)) 0)
+		  (if (> n 999) "-ages" (format "-%dy" n))
+		(setq time (% time 315360000))
+		;; days
+		(if (> (setq n (/ time 86400)) 0)
+		    (format "-%dd" n)
+		  (setq time (% time 86400))
+		  ;; hours
+		  (if (> (setq n (/ time 3600)) 0)
+		      (format "-%dh" n)
+		    (setq time (% time 3600))
+		    ;; mins
+		    (if (> (setq n (/ time 60)) 0)
+			(format "-%dm" n)
+		      ;; secs
+		      (format "-%ds" (% time 60)))))))
+	(setq time (concat
+		    (if current "*" " ")
+		    time
+		    (if register (concat "[" (char-to-string register) "]")
+		      "   ")))
+	(setq n (length time))
+	(if (< n 9)
+	    (concat (make-string (- 9 n) ? ) time)
+	  time))
+    ;; absolute time
+    (concat (if current "*" " ")
+	    (format-time-string "%H:%M:%S" timestamp)
+	    (if register
+		(concat "[" (char-to-string register) "]")
+	      "   "))))
 
 
 
@@ -3494,7 +3541,7 @@ at mouse event POS."
         (if (setq undo-tree-visualizer-timestamps
                   (not undo-tree-visualizer-timestamps))
             ;; need sufficient space if displaying timestamps
-            (max 13 (default-value 'undo-tree-visualizer-spacing))
+	    (if undo-tree-visualizer-relative-timestamps 9 13)
           (default-value 'undo-tree-visualizer-spacing)))
   ;; redraw tree
   (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))
