@@ -998,16 +998,6 @@ in visualizer."
   :group 'undo-tree)
 
 
-(defvar undo-tree-map nil
-  "Keymap used in undo-tree-mode.")
-
-(defvar undo-tree-visualizer-map nil
-  "Keymap used in undo-tree visualizer.")
-
-(defvar undo-tree-visualizer-selection-map nil
-  "Keymap used in undo-tree visualizer selection mode.")
-
-
 (defvar undo-tree-visualizer-parent-buffer nil
   "Parent buffer in visualizer.")
 (make-variable-buffer-local 'undo-tree-visualizer-parent-buffer)
@@ -1036,164 +1026,132 @@ in visualizer."
 ;;; =================================================================
 ;;;                     Setup default keymaps
 
-(unless undo-tree-map
-  (setq undo-tree-map (make-sparse-keymap))
-  ;; remap `undo' and `undo-only' to `undo-tree-undo'
-  (define-key undo-tree-map [remap undo] 'undo-tree-undo)
-  (define-key undo-tree-map [remap undo-only] 'undo-tree-undo)
-  ;; bind standard undo bindings (since these match redo counterparts)
-  (define-key undo-tree-map (kbd "C-/") 'undo-tree-undo)
-  (define-key undo-tree-map "\C-_" 'undo-tree-undo)
-  ;; redo doesn't exist normally, so define our own keybindings
-  (define-key undo-tree-map (kbd "C-?") 'undo-tree-redo)
-  (define-key undo-tree-map (kbd "M-_") 'undo-tree-redo)
-  ;; just in case something has defined `redo'...
-  (define-key undo-tree-map [remap redo] 'undo-tree-redo)
-  ;; we use "C-x u" for the undo-tree visualizer
-  (define-key undo-tree-map (kbd "\C-x u") 'undo-tree-visualize)
-  ;; bind register commands
-  (define-key undo-tree-map (kbd "C-x r u")
-    'undo-tree-save-state-to-register)
-  (define-key undo-tree-map (kbd "C-x r U")
-    'undo-tree-restore-state-from-register))
+(defvar undo-tree-map nil
+  "Keymap used in undo-tree-mode.")
 
+(unless undo-tree-map
+  (let ((map (make-sparse-keymap)))
+    ;; remap `undo' and `undo-only' to `undo-tree-undo'
+    (define-key map [remap undo] 'undo-tree-undo)
+    (define-key map [remap undo-only] 'undo-tree-undo)
+    ;; bind standard undo bindings (since these match redo counterparts)
+    (define-key map (kbd "C-/") 'undo-tree-undo)
+    (define-key map "\C-_" 'undo-tree-undo)
+    ;; redo doesn't exist normally, so define our own keybindings
+    (define-key map (kbd "C-?") 'undo-tree-redo)
+    (define-key map (kbd "M-_") 'undo-tree-redo)
+    ;; just in case something has defined `redo'...
+    (define-key map [remap redo] 'undo-tree-redo)
+    ;; we use "C-x u" for the undo-tree visualizer
+    (define-key map (kbd "\C-x u") 'undo-tree-visualize)
+    ;; bind register commands
+    (define-key map (kbd "C-x r u") 'undo-tree-save-state-to-register)
+    (define-key map (kbd "C-x r U") 'undo-tree-restore-state-from-register)
+    ;; set keymap
+    (setq undo-tree-map map)))
+
+
+(defvar undo-tree-visualizer-map nil
+  "Keymap used in undo-tree visualizer.")
 
 (unless undo-tree-visualizer-map
-  (setq undo-tree-visualizer-map (make-keymap))
-  ;; vertical motion keys undo/redo
-  (define-key undo-tree-visualizer-map [remap previous-line]
-    'undo-tree-visualize-undo)
-  (define-key undo-tree-visualizer-map [remap next-line]
-    'undo-tree-visualize-redo)
-  (define-key undo-tree-visualizer-map [up]
-    'undo-tree-visualize-undo)
-  (define-key undo-tree-visualizer-map "p"
-    'undo-tree-visualize-undo)
-  (define-key undo-tree-visualizer-map "\C-p"
-    'undo-tree-visualize-undo)
-  (define-key undo-tree-visualizer-map [down]
-    'undo-tree-visualize-redo)
-  (define-key undo-tree-visualizer-map "n"
-    'undo-tree-visualize-redo)
-  (define-key undo-tree-visualizer-map "\C-n"
-    'undo-tree-visualize-redo)
-  ;; horizontal motion keys switch branch
-  (define-key undo-tree-visualizer-map [remap forward-char]
-    'undo-tree-visualize-switch-branch-right)
-  (define-key undo-tree-visualizer-map [remap backward-char]
-    'undo-tree-visualize-switch-branch-left)
-  (define-key undo-tree-visualizer-map [right]
-    'undo-tree-visualize-switch-branch-right)
-  (define-key undo-tree-visualizer-map "f"
-    'undo-tree-visualize-switch-branch-right)
-  (define-key undo-tree-visualizer-map "\C-f"
-    'undo-tree-visualize-switch-branch-right)
-  (define-key undo-tree-visualizer-map [left]
-    'undo-tree-visualize-switch-branch-left)
-  (define-key undo-tree-visualizer-map "b"
-    'undo-tree-visualize-switch-branch-left)
-  (define-key undo-tree-visualizer-map "\C-b"
-    'undo-tree-visualize-switch-branch-left)
-  ;; mouse sets buffer state to node at click
-  (define-key undo-tree-visualizer-map [mouse-1]
-    'undo-tree-visualizer-mouse-set)
-  ;; toggle timestamps
-  (define-key undo-tree-visualizer-map "t"
-    'undo-tree-visualizer-toggle-timestamps)
-  ;; toggle diff
-  (define-key undo-tree-visualizer-map "d"
-    'undo-tree-visualizer-toggle-diff)
-  ;; selection mode
-  (define-key undo-tree-visualizer-map "s"
-    'undo-tree-visualizer-selection-mode)
-  ;; horizontal scrolling may be needed if the tree is very wide
-  (define-key undo-tree-visualizer-map ","
-    'undo-tree-visualizer-scroll-left)
-  (define-key undo-tree-visualizer-map "."
-    'undo-tree-visualizer-scroll-right)
-  (define-key undo-tree-visualizer-map "<"
-    'undo-tree-visualizer-scroll-left)
-  (define-key undo-tree-visualizer-map ">"
-    'undo-tree-visualizer-scroll-right)
-  ;; vertical scrolling may be needed if the tree is very tall
-  (define-key undo-tree-visualizer-map [next] 'scroll-up)
-  (define-key undo-tree-visualizer-map [prior] 'scroll-down)
-  ;; quit visualizer
-  (define-key undo-tree-visualizer-map "q"
-    'undo-tree-visualizer-quit)
-  (define-key undo-tree-visualizer-map "\C-q"
-    'undo-tree-visualizer-quit))
+  (let ((map (make-sparse-keymap)))
+    ;; vertical motion keys undo/redo
+    (define-key map [remap previous-line] 'undo-tree-visualize-undo)
+    (define-key map [remap next-line] 'undo-tree-visualize-redo)
+    (define-key map [up] 'undo-tree-visualize-undo)
+    (define-key map "p" 'undo-tree-visualize-undo)
+    (define-key map "\C-p" 'undo-tree-visualize-undo)
+    (define-key map [down] 'undo-tree-visualize-redo)
+    (define-key map "n" 'undo-tree-visualize-redo)
+    (define-key map "\C-n" 'undo-tree-visualize-redo)
+    ;; horizontal motion keys switch branch
+    (define-key map [remap forward-char]
+      'undo-tree-visualize-switch-branch-right)
+    (define-key map [remap backward-char]
+      'undo-tree-visualize-switch-branch-left)
+    (define-key map [right] 'undo-tree-visualize-switch-branch-right)
+    (define-key map "f" 'undo-tree-visualize-switch-branch-right)
+    (define-key map "\C-f" 'undo-tree-visualize-switch-branch-right)
+    (define-key map [left] 'undo-tree-visualize-switch-branch-left)
+    (define-key map "b" 'undo-tree-visualize-switch-branch-left)
+    (define-key map "\C-b" 'undo-tree-visualize-switch-branch-left)
+    ;; mouse sets buffer state to node at click
+    (define-key map [mouse-1] 'undo-tree-visualizer-mouse-set)
+    ;; toggle timestamps
+    (define-key map "t" 'undo-tree-visualizer-toggle-timestamps)
+    ;; toggle diff
+    (define-key map "d" 'undo-tree-visualizer-toggle-diff)
+    ;; selection mode
+    (define-key map "s" 'undo-tree-visualizer-selection-mode)
+    ;; horizontal scrolling may be needed if the tree is very wide
+    (define-key map "," 'undo-tree-visualizer-scroll-left)
+    (define-key map "." 'undo-tree-visualizer-scroll-right)
+    (define-key map "<" 'undo-tree-visualizer-scroll-left)
+    (define-key map ">" 'undo-tree-visualizer-scroll-right)
+    ;; vertical scrolling may be needed if the tree is very tall
+    (define-key map [next] 'scroll-up)
+    (define-key map [prior] 'scroll-down)
+    ;; quit visualizer
+    (define-key map "q" 'undo-tree-visualizer-quit)
+    (define-key map "\C-q" 'undo-tree-visualizer-quit)
+    ;; set keymap
+    (setq undo-tree-visualizer-map map)))
 
+
+(defvar undo-tree-visualizer-selection-map nil
+  "Keymap used in undo-tree visualizer selection mode.")
 
 (unless undo-tree-visualizer-selection-map
-  (setq undo-tree-visualizer-selection-map (make-keymap))
-  ;; vertical motion keys move up and down tree
-  (define-key undo-tree-visualizer-selection-map [remap previous-line]
-    'undo-tree-visualizer-select-previous)
-  (define-key undo-tree-visualizer-selection-map [remap next-line]
-    'undo-tree-visualizer-select-next)
-  (define-key undo-tree-visualizer-selection-map [up]
-    'undo-tree-visualizer-select-previous)
-  (define-key undo-tree-visualizer-selection-map "p"
-    'undo-tree-visualizer-select-previous)
-  (define-key undo-tree-visualizer-selection-map "\C-p"
-    'undo-tree-visualizer-select-previous)
-  (define-key undo-tree-visualizer-selection-map [down]
-    'undo-tree-visualizer-select-next)
-  (define-key undo-tree-visualizer-selection-map "n"
-    'undo-tree-visualizer-select-next)
-  (define-key undo-tree-visualizer-selection-map "\C-n"
-    'undo-tree-visualizer-select-next)
-  ;; vertical scroll keys move up and down quickly
-  (define-key undo-tree-visualizer-selection-map [next]
-    (lambda () (interactive) (undo-tree-visualizer-select-next 10)))
-  (define-key undo-tree-visualizer-selection-map [prior]
-    (lambda () (interactive) (undo-tree-visualizer-select-previous 10)))
-  ;; horizontal motion keys move to left and right siblings
-  (define-key undo-tree-visualizer-selection-map [remap forward-char]
-    'undo-tree-visualizer-select-right)
-  (define-key undo-tree-visualizer-selection-map [remap backward-char]
-    'undo-tree-visualizer-select-left)
-  (define-key undo-tree-visualizer-selection-map [right]
-    'undo-tree-visualizer-select-right)
-  (define-key undo-tree-visualizer-selection-map "f"
-    'undo-tree-visualizer-select-right)
-  (define-key undo-tree-visualizer-selection-map "\C-f"
-    'undo-tree-visualizer-select-right)
-  (define-key undo-tree-visualizer-selection-map [left]
-    'undo-tree-visualizer-select-left)
-  (define-key undo-tree-visualizer-selection-map "b"
-    'undo-tree-visualizer-select-left)
-  (define-key undo-tree-visualizer-selection-map "\C-b"
-    'undo-tree-visualizer-select-left)
-  ;; horizontal scroll keys move left or right quickly
-  (define-key undo-tree-visualizer-selection-map ","
-    (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
-  (define-key undo-tree-visualizer-selection-map "."
-    (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
-  (define-key undo-tree-visualizer-selection-map "<"
-    (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
-  (define-key undo-tree-visualizer-selection-map ">"
-    (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
-  ;; mouse or <enter> sets buffer state to node at point/click
-  (define-key undo-tree-visualizer-selection-map "\r"
-    'undo-tree-visualizer-set)
-  (define-key undo-tree-visualizer-selection-map [mouse-1]
-    'undo-tree-visualizer-mouse-set)
-  ;; toggle timestamps
-  (define-key undo-tree-visualizer-selection-map "t"
-    'undo-tree-visualizer-toggle-timestamps)
-  ;; toggle diff
-  (define-key undo-tree-visualizer-selection-map "d"
-    'undo-tree-visualizer-selection-toggle-diff)
-  ;; quit visualizer selection mode
-  (define-key undo-tree-visualizer-selection-map "s"
-    'undo-tree-visualizer-mode)
-  ;; quit visualizer
-  (define-key undo-tree-visualizer-selection-map "q"
-    'undo-tree-visualizer-quit)
-  (define-key undo-tree-visualizer-selection-map "\C-q"
-    'undo-tree-visualizer-quit))
+  (let ((map (make-sparse-keymap)))
+    ;; vertical motion keys move up and down tree
+    (define-key map [remap previous-line]
+      'undo-tree-visualizer-select-previous)
+    (define-key map [remap next-line]
+      'undo-tree-visualizer-select-next)
+    (define-key map [up] 'undo-tree-visualizer-select-previous)
+    (define-key map "p" 'undo-tree-visualizer-select-previous)
+    (define-key map "\C-p" 'undo-tree-visualizer-select-previous)
+    (define-key map [down] 'undo-tree-visualizer-select-next)
+    (define-key map "n" 'undo-tree-visualizer-select-next)
+    (define-key map "\C-n" 'undo-tree-visualizer-select-next)
+    ;; vertical scroll keys move up and down quickly
+    (define-key map [next]
+      (lambda () (interactive) (undo-tree-visualizer-select-next 10)))
+    (define-key map [prior]
+      (lambda () (interactive) (undo-tree-visualizer-select-previous 10)))
+    ;; horizontal motion keys move to left and right siblings
+    (define-key map [remap forward-char] 'undo-tree-visualizer-select-right)
+    (define-key map [remap backward-char] 'undo-tree-visualizer-select-left)
+    (define-key map [right] 'undo-tree-visualizer-select-right)
+    (define-key map "f" 'undo-tree-visualizer-select-right)
+    (define-key map "\C-f" 'undo-tree-visualizer-select-right)
+    (define-key map [left] 'undo-tree-visualizer-select-left)
+    (define-key map "b" 'undo-tree-visualizer-select-left)
+    (define-key map "\C-b" 'undo-tree-visualizer-select-left)
+    ;; horizontal scroll keys move left or right quickly
+    (define-key map ","
+      (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
+    (define-key map "."
+      (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
+    (define-key map "<"
+      (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
+    (define-key map ">"
+      (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
+    ;; mouse or <enter> sets buffer state to node at point/click
+    (define-key map "\r" 'undo-tree-visualizer-set)
+    (define-key map [mouse-1] 'undo-tree-visualizer-mouse-set)
+    ;; toggle timestamps
+    (define-key map "t" 'undo-tree-visualizer-toggle-timestamps)
+    ;; toggle diff
+    (define-key map "d" 'undo-tree-visualizer-selection-toggle-diff)
+    ;; quit visualizer selection mode
+    (define-key map "s" 'undo-tree-visualizer-mode)
+    ;; quit visualizer
+    (define-key map "q" 'undo-tree-visualizer-quit)
+    (define-key map "\C-q" 'undo-tree-visualizer-quit)
+    ;; set keymap
+    (setq undo-tree-visualizer-selection-map map)))
 
 
 
