@@ -650,6 +650,8 @@
 ;; * clear visualizer data / kill visualizer in `undo-tree-save-history'
 ;;   before saving history to file, otherwise markers in visualizer meta-data
 ;;   cause read errors in `undo-tree-load-history'
+;; * make `undo-tree-visualizer-timestamps' into defcustom, to allow
+;;   timestamps to be displayed by default
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -949,6 +951,18 @@ Otherwise, display absolute times."
   :type 'boolean)
 
 
+(defcustom undo-tree-visualizer-timestamps nil
+  "When non-nil, display time-stamps by default
+in undo-tree visualizer.
+
+\\<undo-tree-visualizer-map>You can always toggle time-stamps on and off \
+using \\[undo-tree-visualizer-toggle-timestamps], regardless of the
+setting of this variable."
+  :group 'undo-tree
+  :type 'boolean)
+(make-variable-buffer-local 'undo-tree-visualizer-timestamps)
+
+
 (defcustom undo-tree-visualizer-diff nil
   "When non-nil, display diff by default in undo-tree visualizer.
 
@@ -1007,20 +1021,24 @@ in visualizer."
   "Parent buffer in visualizer.")
 (make-variable-buffer-local 'undo-tree-visualizer-parent-buffer)
 
-(defvar undo-tree-visualizer-timestamps nil
-  "Non-nil when visualizer is displaying time-stamps.")
-(make-variable-buffer-local 'undo-tree-visualizer-timestamps)
-
-(defvar undo-tree-visualizer-spacing 3
-  "Horizontal spacing needed for drawing undo-tree in visualizer.")
+;; stores current horizontal spacing needed for drawing undo-tree
+(defvar undo-tree-visualizer-spacing nil)
 (make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
-(defconst undo-tree-visualizer-buffer-name " *undo-tree*")
-(defconst undo-tree-diff-buffer-name "*undo-tree Diff*")
+;; calculate horizontal spacing required for drawing undo-tree with current
+;; settings
+(defsubst undo-tree-visualizer-calculate-spacing ()
+  (if undo-tree-visualizer-timestamps
+      (if undo-tree-visualizer-relative-timestamps 9 13)
+    3))
 
 ;; dynamically bound to t when undoing from visualizer, to inhibit
 ;; `undo-tree-kill-visualizer' hook function in parent buffer
 (defvar undo-tree-inhibit-kill-visualizer nil)
+
+
+(defconst undo-tree-visualizer-buffer-name " *undo-tree*")
+(defconst undo-tree-diff-buffer-name "*undo-tree Diff*")
 
 ;; prevent debugger being called on "No further redo information"
 (add-to-list 'debug-ignored-errors "^No further redo information")
@@ -3007,6 +3025,8 @@ signaling an error if file is not found."
      (get-buffer-create undo-tree-visualizer-buffer-name))
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
+    (setq undo-tree-visualizer-spacing
+	  (undo-tree-visualizer-calculate-spacing))
     (when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
     (undo-tree-visualizer-mode)
     (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
@@ -3502,12 +3522,8 @@ at mouse event POS."
 (defun undo-tree-visualizer-toggle-timestamps ()
   "Toggle display of time-stamps."
   (interactive)
-  (setq undo-tree-visualizer-spacing
-        (if (setq undo-tree-visualizer-timestamps
-                  (not undo-tree-visualizer-timestamps))
-            ;; need sufficient space if displaying timestamps
-	    (if undo-tree-visualizer-relative-timestamps 9 13)
-          (default-value 'undo-tree-visualizer-spacing)))
+  (setq undo-tree-visualizer-timestamps (not undo-tree-visualizer-timestamps))
+  (setq undo-tree-visualizer-spacing (undo-tree-visualizer-calculate-spacing))
   ;; redraw tree
   (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))
 
