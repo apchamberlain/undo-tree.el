@@ -103,6 +103,7 @@
 ;;   Restore buffer state from register.
 ;;
 ;;
+;;
 ;; In the undo-tree visualizer:
 ;;
 ;; <up>  p  C-p  (`undo-tree-visualize-undo')
@@ -117,11 +118,23 @@
 ;; <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
 ;;   Switch to next undo-tree branch.
 ;;
+;; <mouse-1>  (`undo-tree-visualizer-mouse-set')
+;;   Set state to node at mouse click.
+;;
 ;; t  (`undo-tree-visualizer-toggle-timestamps')
 ;;   Toggle display of time-stamps.
 ;;
-;; q  C-q  (`undo-tree-visualizer-quit')
+;; d  (`undo-tree-visualizer-toggle-diff')
+;;   Toggle diff display.
+;;
+;; s  (`undo-tree-visualizer-selection-mode')
+;;   Toggle keyboard selection mode.
+;;
+;; q  (`undo-tree-visualizer-quit')
 ;;   Quit undo-tree-visualizer.
+;;
+;; C-q  (`undo-tree-visualizer-abort')
+;;   Abort undo-tree-visualizer.
 ;;
 ;; ,  <
 ;;   Scroll left.
@@ -134,6 +147,53 @@
 ;;
 ;; <pgdown>  C-v
 ;;   Scroll down.
+;;
+;;
+;;
+;; In visualizer selection mode:
+;;
+;; <up>  p  C-p  (`undo-tree-visualizer-select-previous')
+;;   Select previous node.
+;;
+;; <down>  n  C-n  (`undo-tree-visualizer-select-next')
+;;   Select next node.
+;;
+;; <left>  b  C-b  (`undo-tree-visualizer-select-left')
+;;   Select left sibling node.
+;;
+;; <right>  f  C-f  (`undo-tree-visualizer-select-right')
+;;   Select right sibling node.
+;;
+;; <pgup>  M-v
+;;   Select node 10 above.
+;;
+;; <pgdown>  C-v
+;;   Select node 10 below.
+;;
+;; <enter>  (`undo-tree-visualizer-set')
+;;   Set state to selected node and exit selection mode.
+;;
+;; s  (`undo-tree-visualizer-mode')
+;;   Exit selection mode.
+;;
+;; t  (`undo-tree-visualizer-toggle-timestamps')
+;;   Toggle display of time-stamps.
+;;
+;; d  (`undo-tree-visualizer-toggle-diff')
+;;   Toggle diff display.
+;;
+;; q  (`undo-tree-visualizer-quit')
+;;   Quit undo-tree-visualizer.
+;;
+;; C-q  (`undo-tree-visualizer-abort')
+;;   Abort undo-tree-visualizer.
+;;
+;; ,  <
+;;   Scroll left.
+;;
+;; .  >
+;;   Scroll right.
+;;
 ;;
 ;;
 ;;
@@ -436,9 +496,12 @@
 ;; diagrams, because `undo-tree-mode' includes an undo-tree visualizer which
 ;; draws them for you! In fact, it draws even better diagrams: it highlights
 ;; the node representing the current buffer state, it highlights the current
-;; branch, and (by hitting "t") you can toggle the display of
-;; time-stamps. (There's one other tiny difference: the visualizer puts the
-;; most recent branch on the left rather than the right.)
+;; branch, and you can toggle the display of time-stamps (by hitting "t") and
+;; a diff of the undo changes (by hitting "d"). (There's one other tiny
+;; difference: the visualizer puts the most recent branch on the left rather
+;; than the right.)
+;;
+;; Bring up the undo tree visualizer whenever you want by hitting "C-x u".
 ;;
 ;; In the visualizer, the usual keys for moving up and down a buffer instead
 ;; move up and down the undo history tree (e.g. the up and down arrow keys, or
@@ -480,7 +543,9 @@
 ;; you want to customize the diff display.)
 ;;
 ;; Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
-;; whatever state you ended at.
+;; whatever state you ended at. Hitting "C-q" will abort the visualizer,
+;; returning the parent buffer to whatever state it was originally in when the
+;; visualizer was .
 ;;
 ;;
 ;;
@@ -655,6 +720,8 @@
 ;; * use `undo-tree-visualizer-selected-node' to store currently selected node
 ;;   in visualizer selection mode, instead of relying on point location, to
 ;;   avoid errors if point was moved manually
+;; * added `undo-tree-visualizer-abort' command to quit visualizer and return
+;;   to original state, stored in `undo-tree-visualizer-initial-node'
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -1035,7 +1102,11 @@ in visualizer."
       (if undo-tree-visualizer-relative-timestamps 9 13)
     3))
 
-;; holds marker located at selected node in visualizer selection mode
+;; holds node that was current when visualizer was invoked
+(defvar undo-tree-visualizer-initial-node nil)
+(make-variable-buffer-local 'undo-tree-visualizer-initial-node)
+
+;; holds currently selected node in visualizer selection mode
 (defvar undo-tree-visualizer-selected-node nil)
 (make-variable-buffer-local 'undo-tree-visualizer-selected)
 
@@ -1122,9 +1193,9 @@ in visualizer."
     ;; vertical scrolling may be needed if the tree is very tall
     (define-key map [next] 'scroll-up)
     (define-key map [prior] 'scroll-down)
-    ;; quit visualizer
+    ;; quit/abort visualizer
     (define-key map "q" 'undo-tree-visualizer-quit)
-    (define-key map "\C-q" 'undo-tree-visualizer-quit)
+    (define-key map "\C-q" 'undo-tree-visualizer-abort)
     ;; set keymap
     (setq undo-tree-visualizer-map map)))
 
@@ -1179,7 +1250,7 @@ in visualizer."
     (define-key map "s" 'undo-tree-visualizer-mode)
     ;; quit visualizer
     (define-key map "q" 'undo-tree-visualizer-quit)
-    (define-key map "\C-q" 'undo-tree-visualizer-quit)
+    (define-key map "\C-q" 'undo-tree-visualizer-abort)
     ;; set keymap
     (setq undo-tree-visualizer-selection-map map)))
 
@@ -3032,6 +3103,7 @@ signaling an error if file is not found."
      (get-buffer-create undo-tree-visualizer-buffer-name))
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq buffer-undo-tree undo-tree)
+    (setq undo-tree-visualizer-initial-node (undo-tree-current undo-tree))
     (setq undo-tree-visualizer-spacing
 	  (undo-tree-visualizer-calculate-spacing))
     (when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
@@ -3499,9 +3571,18 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
       ;; kill visualizer buffer
       (kill-buffer nil)
       ;; switch back to parent buffer
-      (if (setq window (get-buffer-window parent))
-	  (select-window window)
-	(switch-to-buffer parent)))))
+      (unwind-protect
+	  (if (setq window (get-buffer-window parent))
+	      (select-window window)
+	    (switch-to-buffer parent))))))
+
+
+(defun undo-tree-visualizer-abort ()
+  "Quit the undo-tree visualizer and return buffer to original state."
+  (interactive)
+  (let ((node undo-tree-visualizer-initial-node))
+    (undo-tree-visualizer-quit)
+    (undo-tree-set node)))
 
 
 (defun undo-tree-visualizer-set (&optional pos)
