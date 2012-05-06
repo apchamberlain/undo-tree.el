@@ -647,6 +647,9 @@
 ;; * use a function `undo-tree-make-history-save-file-name' function to
 ;;   generate history save filename, allowing save file to be customized by
 ;;   overriding this function
+;; * clear visualizer data / kill visualizer in `undo-tree-save-history'
+;;   before saving history to file, otherwise markers in visualizer meta-data
+;;   cause read errors in `undo-tree-load-history'
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -2892,6 +2895,9 @@ Otherwise, prompt for one.
 If OVERWRITE is non-nil, any existing file will be overwritten
 without asking for confirmation."
   (interactive)
+  (condition-case nil
+      (undo-tree-kill-visualizer)
+    (error (undo-tree-clear-visualizer-data buffer-undo-tree)))
   (undo-list-transfer-to-tree)
   (let ((buff (current-buffer))
 	(tree (copy-undo-tree buffer-undo-tree)))
