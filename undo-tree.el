@@ -644,6 +644,9 @@
 ;;   which prevented registers from being displayed in visualizer
 ;; * added `undo-tree-visualizer-relative-timestamps' option to make
 ;;   visualizer  display timestamps relative to current time
+;; * use a function `undo-tree-make-history-save-file-name' function to
+;;   generate history save filename, allowing save file to be customized by
+;;   overriding this function
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -974,12 +977,12 @@ within the current region."
 
 (defface undo-tree-visualizer-default-face
   '((((class color)) :foreground "gray"))
-  "*Face used to draw undo-tree in visualizer."
+  "Face used to draw undo-tree in visualizer."
   :group 'undo-tree)
 
 (defface undo-tree-visualizer-current-face
   '((((class color)) :foreground "red"))
-  "*Face used to highlight current undo-tree node in visualizer."
+  "Face used to highlight current undo-tree node in visualizer."
   :group 'undo-tree)
 
 (defface undo-tree-visualizer-active-branch-face
@@ -987,13 +990,12 @@ within the current region."
      (:foreground "white" :weight bold))
     (((class color) (background light))
      (:foreground "black" :weight bold)))
-  "*Face used to highlight active undo-tree branch
-in visualizer."
+  "Face used to highlight active undo-tree branch in visualizer."
   :group 'undo-tree)
 
 (defface undo-tree-visualizer-register-face
   '((((class color)) :foreground "yellow"))
-  "*Face used to highlight undo-tree nodes saved to a register
+  "Face used to highlight undo-tree nodes saved to a register
 in visualizer."
   :group 'undo-tree)
 
@@ -2875,10 +2877,9 @@ Argument is a character, naming the register."
 
 
 
-(defmacro undo-tree-history-save-file (file)
-  `(concat (file-name-directory ,file)
-	   "." (file-name-nondirectory ,file)
-	   ".~undo-tree"))
+(defun undo-tree-make-history-save-file-name ()
+  (concat (file-name-directory (buffer-file-name))
+	  "." (file-name-nondirectory (buffer-file-name)) ".~undo-tree"))
 
 
 (defun undo-tree-save-history (&optional filename overwrite)
@@ -2898,7 +2899,7 @@ without asking for confirmation."
     (unless filename
       (setq filename
 	    (if buffer-file-name
-		(undo-tree-history-save-file buffer-file-name)
+		(undo-tree-make-history-save-file-name)
 	      (expand-file-name (read-file-name "File to save in: ") nil))))
     (when (or (not (file-exists-p filename))
 	      overwrite
@@ -2927,7 +2928,7 @@ signaling an error if file is not found."
   (unless filename
     (setq filename
 	  (if buffer-file-name
-	      (undo-tree-history-save-file buffer-file-name)
+	      (undo-tree-make-history-save-file-name)
 	    (expand-file-name (read-file-name "File to load from: ") nil))))
 
   ;; attempt to read undo-tree from FILENAME
