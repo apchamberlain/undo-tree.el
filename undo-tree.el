@@ -652,6 +652,9 @@
 ;;   cause read errors in `undo-tree-load-history'
 ;; * make `undo-tree-visualizer-timestamps' into defcustom, to allow
 ;;   timestamps to be displayed by default
+;; * use `undo-tree-visualizer-selected-node' to store currently selected node
+;;   in visualizer selection mode, instead of relying on point location, to
+;;   avoid errors if point was moved manually
 ;;
 ;; Version 0.4
 ;; * implemented persistent history storage: `undo-tree-save-history' and
@@ -1031,6 +1034,10 @@ in visualizer."
   (if undo-tree-visualizer-timestamps
       (if undo-tree-visualizer-relative-timestamps 9 13)
     3))
+
+;; holds marker located at selected node in visualizer selection mode
+(defvar undo-tree-visualizer-selected-node nil)
+(make-variable-buffer-local 'undo-tree-visualizer-selected)
 
 ;; dynamically bound to t when undoing from visualizer, to inhibit
 ;; `undo-tree-kill-visualizer' hook function in parent buffer
@@ -3404,6 +3411,7 @@ Within the undo-tree visualizer, the following keys are available:
   (setq truncate-lines t)
   (setq cursor-type nil)
   (setq buffer-read-only t)
+  (setq undo-tree-visualizer-selected-node nil)
   (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))
 
 
@@ -3550,6 +3558,8 @@ at mouse event POS."
   (setq mode-name "undo-tree-visualizer-selection-mode")
   (use-local-map undo-tree-visualizer-selection-map)
   (setq cursor-type 'box)
+  (setq undo-tree-visualizer-selected-node
+	(undo-tree-current buffer-undo-tree))
   ;; erase diff (if any), as initially selected node is identical to current
   (when undo-tree-visualizer-diff
     (let ((buff (get-buffer undo-tree-diff-buffer-name))
@@ -3560,20 +3570,22 @@ at mouse event POS."
 (defun undo-tree-visualizer-select-previous (&optional arg)
   "Move to previous node."
   (interactive "p")
-  (let ((node (get-text-property (point) 'undo-tree-node)))
+  (let ((node undo-tree-visualizer-selected-node))
     (catch 'top
       (dotimes (i arg)
 	(unless (undo-tree-node-previous node) (throw 'top t))
 	(setq node (undo-tree-node-previous node))))
     (goto-char (undo-tree-node-marker node))
-    (when undo-tree-visualizer-diff
-      (undo-tree-visualizer-update-diff node))))
+    (when (and undo-tree-visualizer-diff
+	       (not (eq node undo-tree-visualizer-selected-node)))
+      (undo-tree-visualizer-update-diff node))
+    (setq undo-tree-visualizer-selected-node node)))
 
 
 (defun undo-tree-visualizer-select-next (&optional arg)
   "Move to next node."
   (interactive "p")
-  (let ((node (get-text-property (point) 'undo-tree-node)))
+  (let ((node undo-tree-visualizer-selected-node))
     (catch 'bottom
       (dotimes (i arg)
 	(unless (nth (undo-tree-node-branch node) (undo-tree-node-next node))
@@ -3581,46 +3593,52 @@ at mouse event POS."
 	(setq node
 	      (nth (undo-tree-node-branch node) (undo-tree-node-next node)))))
     (goto-char (undo-tree-node-marker node))
-    (when undo-tree-visualizer-diff
-      (undo-tree-visualizer-update-diff node))))
+    (when (and undo-tree-visualizer-diff
+	       (not (eq node undo-tree-visualizer-selected-node)))
+      (undo-tree-visualizer-update-diff node))
+    (setq undo-tree-visualizer-selected-node node)))
 
 
 (defun undo-tree-visualizer-select-right (&optional arg)
   "Move right to a sibling node."
   (interactive "p")
-  (let ((pos (point))
-	(end (line-end-position))
-	(current (get-text-property (point) 'undo-tree-node))
-	node)
+  (let ((node undo-tree-visualizer-selected-node)
+	end)
+    (goto-char (undo-tree-node-marker undo-tree-visualizer-selected-node))
+    (setq end (line-end-position))
     (catch 'end
       (dotimes (i arg)
-	(while (or (null node) (eq node current))
+	(while (or (null node) (eq node undo-tree-visualizer-selected-node))
 	  (forward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) end) (throw 'end t)))))
-    (unless (eq node current)
-      (goto-char (if node (undo-tree-node-marker node) pos))
-      (when (and undo-tree-visualizer-diff node)
-	(undo-tree-visualizer-update-diff node)))))
+    (goto-char (undo-tree-node-marker
+		(or node undo-tree-visualizer-selected-node)))
+    (when (and undo-tree-visualizer-diff node
+	       (not (eq node undo-tree-visualizer-selected-node)))
+      (undo-tree-visualizer-update-diff node))
+    (setq undo-tree-visualizer-selected-node node)))
 
 
 (defun undo-tree-visualizer-select-left (&optional arg)
   "Move left to a sibling node."
   (interactive "p")
-  (let ((pos (point))
-	(beg (line-beginning-position))
-	(current (get-text-property (point) 'undo-tree-node))
-	node)
+  (let ((node (get-text-property (point) 'undo-tree-node))
+	beg)
+    (goto-char (undo-tree-node-marker undo-tree-visualizer-selected-node))
+    (setq beg (line-beginning-position))
     (catch 'beg
       (dotimes (i arg)
-	(while (or (null node) (eq node current))
+	(while (or (null node) (eq node undo-tree-visualizer-selected-node))
 	  (backward-char)
 	  (setq node (get-text-property (point) 'undo-tree-node))
 	  (when (= (point) beg) (throw 'beg t)))))
-    (unless (eq node current)
-      (goto-char (if node (undo-tree-node-marker node) pos))
-      (when (and undo-tree-visualizer-diff node)
-	(undo-tree-visualizer-update-diff node)))))
+    (goto-char (undo-tree-node-marker
+		(or node undo-tree-visualizer-selected-node)))
+    (when (and undo-tree-visualizer-diff node
+	       (not (eq node undo-tree-visualizer-selected-node)))
+      (undo-tree-visualizer-update-diff node))
+    (setq undo-tree-visualizer-selected-node node)))
 
 
 
