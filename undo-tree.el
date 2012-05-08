@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.5
+;; Version: 0.5.1
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -690,6 +690,9 @@
 
 ;;; Change Log:
 ;;
+;; Version 0.5.1
+;; * remove now unnecessary compatibility hack for `called-interactively-p'
+;;
 ;; Version 0.5
 ;; * implemented diff display in visualizer, toggled on and off using
 ;;   `undo-tree-visualizer-toggle-diff'
@@ -877,16 +880,6 @@
 ;; `region-active-p' isn't defined in Emacs versions < 23
 (unless (fboundp 'region-active-p)
   (defun region-active-p () (and transient-mark-mode mark-active)))
-
-;; `called-interactively-p' doesn't take an argument in Emacs <= 22, but
-;; *requires* an argument in Emacs >= 23.1 (thus forcing us to use around
-;; advice if we want to avoid changing the main code)
-(when (or (<= emacs-major-version 22)
-	  (and (= emacs-major-version 23)
-	       (<= emacs-minor-version 21)))
-  (defadvice called-interactively-p
-    (around undo-tree (&optional kind) activate compile preactivate)
-    ad-do-it)1)
 
 
 ;; `registerv' defstruct isn't defined in Emacs versions < 24
