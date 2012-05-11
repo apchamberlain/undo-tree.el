@@ -692,6 +692,8 @@
 ;;
 ;; Version 0.5.2
 ;; * added `~' to end of default history save-file name
+;; * avoid error in `undo-tree-save-history' when undo is disabled in buffer
+;;   or buffer has no undo information to save
 ;;
 ;; Version 0.5.1
 ;; * remove now unnecessary compatibility hack for `called-interactively-p'
@@ -2987,28 +2989,29 @@ Otherwise, prompt for one.
 If OVERWRITE is non-nil, any existing file will be overwritten
 without asking for confirmation."
   (interactive)
-  (condition-case nil
-      (undo-tree-kill-visualizer)
-    (error (undo-tree-clear-visualizer-data buffer-undo-tree)))
   (undo-list-transfer-to-tree)
-  (let ((buff (current-buffer))
-	(tree (copy-undo-tree buffer-undo-tree)))
-    ;; get filename
-    (unless filename
-      (setq filename
-	    (if buffer-file-name
-		(undo-tree-make-history-save-file-name)
-	      (expand-file-name (read-file-name "File to save in: ") nil))))
-    (when (or (not (file-exists-p filename))
-	      overwrite
-	      (yes-or-no-p (format "Overwrite \"%s\"? " filename)))
-      ;; discard undo-tree object pool before saving
-      (setf (undo-tree-object-pool tree) nil)
-      ;; print undo-tree to file
-      (with-temp-file filename
-	(prin1 (sha1 buff) (current-buffer))
-	(terpri (current-buffer))
-	(let ((print-circle t)) (prin1 tree (current-buffer)))))))
+  (when (and buffer-undo-tree (not (eq buffer-undo-tree t)))
+    (condition-case nil
+	(undo-tree-kill-visualizer)
+      (error (undo-tree-clear-visualizer-data buffer-undo-tree)))
+    (let ((buff (current-buffer))
+	  (tree (copy-undo-tree buffer-undo-tree)))
+      ;; get filename
+      (unless filename
+	(setq filename
+	      (if buffer-file-name
+		  (undo-tree-make-history-save-file-name)
+		(expand-file-name (read-file-name "File to save in: ") nil))))
+      (when (or (not (file-exists-p filename))
+		overwrite
+		(yes-or-no-p (format "Overwrite \"%s\"? " filename)))
+	;; discard undo-tree object pool before saving
+	(setf (undo-tree-object-pool tree) nil)
+	;; print undo-tree to file
+	(with-temp-file filename
+	  (prin1 (sha1 buff) (current-buffer))
+	  (terpri (current-buffer))
+	  (let ((print-circle t)) (prin1 tree (current-buffer))))))))
 
 
 
