@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -689,6 +689,9 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.5.2
+;; * added `~' to end of default history save-file name
 ;;
 ;; Version 0.5.1
 ;; * remove now unnecessary compatibility hack for `called-interactively-p'
@@ -2971,7 +2974,7 @@ Argument is a character, naming the register."
 
 (defun undo-tree-make-history-save-file-name ()
   (concat (file-name-directory (buffer-file-name))
-	  "." (file-name-nondirectory (buffer-file-name)) ".~undo-tree"))
+	  "." (file-name-nondirectory (buffer-file-name)) ".~undo-tree~"))
 
 
 (defun undo-tree-save-history (&optional filename overwrite)
