@@ -695,6 +695,8 @@
 ;;   cope better if undo boundary before undo-tree-canary is missing
 ;;   (e.g. org-mode's `org-self-insert-cluster-for-undo' removes this undo
 ;;   boundary)
+;; * added `undo-tree-history-directory-alist', the undo history file analogue
+;;   of `backup-directory-alist'
 ;;
 ;; Version 0.5.2
 ;; * added `~' to end of default history save-file name
@@ -1014,6 +1016,31 @@ customize."
   :type (if (version-list-< (version-to-list emacs-version) '(24 1 50 1))
 	    '(choice (const :tag "<disabled>" nil))
 	  'boolean))
+
+
+(defcustom undo-tree-history-directory-alist nil
+  "Alist of filename patterns and undo history directory names.
+Each element looks like (REGEXP . DIRECTORY).  Undo history for
+files with names matching REGEXP will be saved in DIRECTORY.
+DIRECTORY may be relative or absolute.  If it is absolute, so
+that all matching files are backed up into the same directory,
+the file names in this directory will be the full name of the
+file backed up with all directory separators changed to `!' to
+prevent clashes.  This will not work correctly if your filesystem
+truncates the resulting name.
+
+For the common case of all backups going into one directory, the
+alist should contain a single element pairing \".\" with the
+appropriate directory name.
+
+If this variable is nil, or it fails to match a filename, the
+backup is made in the original file's directory.
+
+On MS-DOS filesystems without long names this variable is always
+ignored."
+  :group 'undo-tree
+  :type '(repeat (cons (regexp :tag "Regexp matching filename")
+		       (directory :tag "Undo history directory name"))))
 
 
 (defcustom undo-tree-visualizer-relative-timestamps t
@@ -2983,9 +3010,18 @@ Argument is a character, naming the register."
 
 
 
-(defun undo-tree-make-history-save-file-name ()
-  (concat (file-name-directory (buffer-file-name))
-	  "." (file-name-nondirectory (buffer-file-name)) ".~undo-tree~"))
+(defun undo-tree-make-history-save-file-name (file)
+  "Create the undo history file name for FILE.
+Normally this is the file's name with `.' prepended and
+`~undo-tree~' appended.
+
+A match for FILE is sought in `undo-tree-history-directory-alist';
+see the documentation of that variable.  If the directory for the
+backup doesn't exist, it is created."
+  (let* ((backup-directory-alist undo-tree-history-directory-alist)
+	 (name (make-backup-file-name-1 file)))
+    (concat (file-name-directory name) "." (file-name-nondirectory name)
+	    ".~undo-tree~")))
 
 
 (defun undo-tree-save-history (&optional filename overwrite)
@@ -3009,7 +3045,7 @@ without asking for confirmation."
       (unless filename
 	(setq filename
 	      (if buffer-file-name
-		  (undo-tree-make-history-save-file-name)
+		  (undo-tree-make-history-save-file-name buffer-file-name)
 		(expand-file-name (read-file-name "File to save in: ") nil))))
       (when (or (not (file-exists-p filename))
 		overwrite
@@ -3038,7 +3074,7 @@ signaling an error if file is not found."
   (unless filename
     (setq filename
 	  (if buffer-file-name
-	      (undo-tree-make-history-save-file-name)
+	      (undo-tree-make-history-save-file-name buffer-file-name)
 	    (expand-file-name (read-file-name "File to load from: ") nil))))
 
   ;; attempt to read undo-tree from FILENAME
