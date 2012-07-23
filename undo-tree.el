@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.5.3
+;; Version: 0.5.4
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -689,6 +689,12 @@
 
 
 ;;; Change Log:
+;;
+;; Version 0.5.4
+;; * use `with-temp-buffer' instead of `with-temp-file' when saving undo
+;;   history, so that `auto-compression-mode' can take effect if
+;;   `undo-tree-make-history-save-file-name' has been advised in the user's
+;;   .emacs to return a compressed filename extension
 ;;
 ;; Version 0.5.3
 ;; * modified `undo-list-transfer-to-tree' and `undo-list-pop-changeset' to
@@ -3053,10 +3059,13 @@ without asking for confirmation."
 	;; discard undo-tree object pool before saving
 	(setf (undo-tree-object-pool tree) nil)
 	;; print undo-tree to file
-	(with-temp-file filename
+	;; NOTE: we use `with-temp-buffer' instead of `with-temp-file' to
+	;;       allow `auto-compression-mode' to take effect
+	(with-temp-buffer
 	  (prin1 (sha1 buff) (current-buffer))
 	  (terpri (current-buffer))
-	  (let ((print-circle t)) (prin1 tree (current-buffer))))))))
+	  (let ((print-circle t)) (prin1 tree (current-buffer)))
+	  (write-region nil nil filename))))))
 
 
 
