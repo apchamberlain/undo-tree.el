@@ -3133,29 +3133,30 @@ signaling an error if file is not found."
 	       filename)))
     (let (buff tmp hash tree)
       (setq buff (current-buffer))
-      (with-temp-buffer
-	(insert-file-contents filename)
-	(goto-char (point-min))
-	(condition-case nil
-	    (setq hash (read (current-buffer)))
-	  (error
-	   (kill-buffer nil)
-	   (funcall (if noerror 'message 'error)
-		    "Error reading undo-tree history from \"%s\"" filename)
-	   (throw 'load-error nil)))
-	(unless (string= (sha1 buff) hash)
-	  (kill-buffer nil)
-	  (funcall (if noerror 'message 'error)
-		   "Buffer has been modified; could not load undo-tree history")
-	  (throw 'load-error nil))
-	(condition-case nil
-	    (setq tree (read (current-buffer)))
-	  (error
-	   (kill-buffer nil)
-	   (funcall (if noerror 'message 'error)
-		    "Error reading undo-tree history from \"%s\"" filename)
-	   (throw 'load-error nil)))
-	(kill-buffer nil))
+      (with-auto-compression-mode
+	(with-temp-buffer
+	  (insert-file-contents filename)
+	  (goto-char (point-min))
+	  (condition-case nil
+	      (setq hash (read (current-buffer)))
+	    (error
+	     (kill-buffer nil)
+	     (funcall (if noerror 'message 'error)
+		      "Error reading undo-tree history from \"%s\"" filename)
+	     (throw 'load-error nil)))
+	  (unless (string= (sha1 buff) hash)
+	    (kill-buffer nil)
+	    (funcall (if noerror 'message 'error)
+		     "Buffer has been modified; could not load undo-tree history")
+	    (throw 'load-error nil))
+	  (condition-case nil
+	      (setq tree (read (current-buffer)))
+	    (error
+	     (kill-buffer nil)
+	     (funcall (if noerror 'message 'error)
+		      "Error reading undo-tree history from \"%s\"" filename)
+	     (throw 'load-error nil)))
+	  (kill-buffer nil)))
       ;; initialise empty undo-tree object pool
       (setf (undo-tree-object-pool tree)
 	    (make-hash-table :test 'eq :weakness 'value))
