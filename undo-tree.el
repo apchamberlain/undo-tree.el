@@ -730,6 +730,10 @@
 ;; * install history auto-save hooks globally, otherwise
 ;;   `undo-tree-load-history-hook' doesn't run because file has already been
 ;;   loaded before `undo-tree-mode' has installed the hook function
+;; * add `undo-tree-decircle' and `undo-tree-recircle' functions to,
+;;   respecrively,  nullify and restore `previous' links in undo-tree nodes
+;; * speed up history saving and (especially) loading by "de-circling"
+;;   undo-tree data before writing to file and "re-circling" it on load
 ;;
 ;; Version 0.5.3
 ;; * modified `undo-list-transfer-to-tree' and `undo-list-pop-changeset' to
@@ -1674,6 +1678,26 @@ Comparison is done with `eq'."
   ;; (Copied from CL package `gensym'.)
   `(let ((num (prog1 *undo-tree-id-counter* (incf *undo-tree-id-counter*))))
      (make-symbol (format "undo-tree-id%d" num))))
+
+
+(defun undo-tree-decircle (tree)
+  ;; Nullify PREVIOUS links of undo-tree-nodes, to make undo-tree data
+  ;; structure non-circular.
+  (undo-tree-mapc
+   (lambda (node)
+     (dolist (n (undo-tree-node-next node))
+       (setf (undo-tree-node-previous n) nil)))
+   tree))
+
+
+(defun undo-tree-recircle (tree)
+  ;; Recreate PREVIOUS links of undo-tree-nodes, to restore circular undo-tree
+  ;; data structure.
+  (undo-tree-mapc
+   (lambda (node)
+     (dolist (n (undo-tree-node-next node))
+       (setf (undo-tree-node-previous n) node)))
+   tree))
 
 
 
@@ -3051,6 +3075,10 @@ Argument is a character, naming the register."
 
 
 
+
+;;; =====================================================================
+;;;                       Persistent storage
+
 (defun undo-tree-make-history-save-file-name (file)
   "Create the undo history file name for FILE.
 Normally this is the file's name with `.' prepended and
@@ -3081,7 +3109,7 @@ without asking for confirmation."
 	(undo-tree-kill-visualizer)
       (error (undo-tree-clear-visualizer-data buffer-undo-tree)))
     (let ((buff (current-buffer))
-	  (tree (copy-undo-tree buffer-undo-tree)))
+	  tree)
       ;; get filename
       (unless filename
 	(setq filename
@@ -3091,20 +3119,29 @@ without asking for confirmation."
       (when (or (not (file-exists-p filename))
 		overwrite
 		(yes-or-no-p (format "Overwrite \"%s\"? " filename)))
-	;; discard undo-tree object pool before saving
-	(setf (undo-tree-object-pool tree) nil)
-	;; print undo-tree to file
-	;; NOTE: We use `with-temp-buffer' instead of `with-temp-file' to
-	;;       allow `auto-compression-mode' to take effect, in case user
-	;;       has overridden or advised the default
-	;;       `undo-tree-make-history-save-file-name' to add a compressed
-	;;       file extension.
-	(with-auto-compression-mode
-	  (with-temp-buffer
-	    (prin1 (sha1 buff) (current-buffer))
-	    (terpri (current-buffer))
-	    (let ((print-circle t)) (prin1 tree (current-buffer)))
-	    (write-region nil nil filename)))))))
+	(unwind-protect
+	    (progn
+	      ;; transform undo-tree into non-circular structure, and make
+	      ;; temporary copy
+	      (undo-tree-decircle buffer-undo-tree)
+	      (setq tree (copy-undo-tree buffer-undo-tree))
+	      ;; discard undo-tree object pool before saving
+	      (setf (undo-tree-object-pool tree) nil)
+	      ;; print undo-tree to file
+	      ;; NOTE: We use `with-temp-buffer' instead of `with-temp-file'
+	      ;;       to allow `auto-compression-mode' to take effect, in
+	      ;;       case user has overridden or advised the default
+	      ;;       `undo-tree-make-history-save-file-name' to add a
+	      ;;       compressed file extension.
+	      (with-auto-compression-mode
+		(with-temp-buffer
+		  (prin1 (sha1 buff) (current-buffer))
+		  (terpri (current-buffer))
+		  (let ((print-circle t)) (prin1 tree (current-buffer)))
+		  (write-region nil nil filename))))
+	  ;; restore circular undo-tree data structure
+	  (undo-tree-recircle buffer-undo-tree))
+	))))
 
 
 
@@ -3161,6 +3198,8 @@ signaling an error if file is not found."
       ;; initialise empty undo-tree object pool
       (setf (undo-tree-object-pool tree)
 	    (make-hash-table :test 'eq :weakness 'value))
+      ;; restore circular undo-tree data structure
+      (undo-tree-recircle tree)
       (setq buffer-undo-tree tree))))
 
 
