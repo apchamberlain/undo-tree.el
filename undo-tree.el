@@ -1926,9 +1926,10 @@ Comparison is done with `eq'."
 	  (decf (undo-tree-size buffer-undo-tree)
 		(+ (undo-list-byte-size (undo-tree-node-undo node))
 		   (undo-list-byte-size (undo-tree-node-redo node))))
-	  ;; discard new root's undo data
+	  ;; discard new root's undo data and PREVIOUS link
 	  (setf (undo-tree-node-undo node) nil
-		(undo-tree-node-redo node) nil)
+		(undo-tree-node-redo node) nil
+		(undo-tree-node-previous node) nil)
           ;; if new root has branches, or new root is current node, next node
           ;; to discard is oldest leaf, otherwise it's new root
           (if (or (> (length (undo-tree-node-next node)) 1)
