@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.5.4
+;; Version: 0.5.5
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -1613,6 +1613,10 @@ Comparison is done with `eq'."
 (defun undo-list-transfer-to-tree ()
   ;; Transfer entries accumulated in `buffer-undo-list' to `buffer-undo-tree'.
 
+  ;; `undo-list-transfer-to-tree' should never be called when undo is disabled
+  ;; (i.e. `buffer-undo-tree' is t)
+  (assert (not (eq buffer-undo-tree t)))
+
   ;; if `buffer-undo-tree' is empty, create initial undo-tree
   (when (null buffer-undo-tree) (setq buffer-undo-tree (make-undo-tree)))
   ;; make sure there's a canary at end of `buffer-undo-list'
@@ -2903,6 +2907,7 @@ Otherwise, prompt for one.
 If OVERWRITE is non-nil, any existing file will be overwritten
 without asking for confirmation."
   (interactive)
+  (when (eq buffer-undo-list t) (error "No undo information in this buffer"))
   (undo-list-transfer-to-tree)
   (when (and buffer-undo-tree (not (eq buffer-undo-tree t)))
     (condition-case nil
@@ -3006,11 +3011,13 @@ signaling an error if file is not found."
 
 ;; Versions of save/load functions for use in hooks
 (defun undo-tree-save-history-hook ()
-  (when (and undo-tree-mode undo-tree-auto-save-history)
+  (when (and undo-tree-mode undo-tree-auto-save-history
+	     (not (eq buffer-undo-list t)))
     (undo-tree-save-history nil t) nil))
 
 (defun undo-tree-load-history-hook ()
-  (when (and undo-tree-mode undo-tree-auto-save-history)
+  (when (and undo-tree-mode undo-tree-auto-save-history
+	     (not (eq buffer-undo-list t)))
     (undo-tree-load-history nil t)))
 
 
