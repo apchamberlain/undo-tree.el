@@ -1467,14 +1467,14 @@ that are already part of `buffer-undo-tree'."
       (setf (undo-tree-node-previous n) parent))))
 
 
-(defun undo-tree-mapc (--undo-tree-mapc-function-- undo-tree)
-  ;; Apply FUNCTION to each node in UNDO-TREE.
-  (let ((stack (list (undo-tree-root undo-tree)))
-        node)
+(defun undo-tree-mapc (--undo-tree-mapc-function-- node)
+  ;; Apply FUNCTION to NODE and to each node below it.
+  (let ((stack (list node))
+	n)
     (while stack
-      (setq node (pop stack))
-      (funcall --undo-tree-mapc-function-- node)
-      (setq stack (append (undo-tree-node-next node) stack)))))
+      (setq n (pop stack))
+      (funcall --undo-tree-mapc-function-- n)
+      (setq stack (append (undo-tree-node-next n) stack)))))
 
 
 (defmacro undo-tree-num-branches ()
@@ -1506,24 +1506,24 @@ Comparison is done with `eq'."
      (make-symbol (format "undo-tree-id%d" num))))
 
 
-(defun undo-tree-decircle (tree)
-  ;; Nullify PREVIOUS links of undo-tree-nodes, to make undo-tree data
+(defun undo-tree-decircle (undo-tree)
+  ;; Nullify PREVIOUS links of UNDO-TREE nodes, to make UNDO-TREE data
   ;; structure non-circular.
   (undo-tree-mapc
    (lambda (node)
      (dolist (n (undo-tree-node-next node))
        (setf (undo-tree-node-previous n) nil)))
-   tree))
+   (undo-tree-root undo-tree)))
 
 
-(defun undo-tree-recircle (tree)
-  ;; Recreate PREVIOUS links of undo-tree-nodes, to restore circular undo-tree
+(defun undo-tree-recircle (undo-tree)
+  ;; Recreate PREVIOUS links of UNDO-TREE nodes, to restore circular UNDO-TREE
   ;; data structure.
   (undo-tree-mapc
    (lambda (node)
      (dolist (n (undo-tree-node-next node))
        (setf (undo-tree-node-previous n) node)))
-   tree))
+   (undo-tree-root undo-tree)))
 
 
 
@@ -1905,9 +1905,9 @@ which is defined in the `warnings' library.\n")
 ;;; =====================================================================
 ;;;                 Visualizer-related functions
 
-(defun undo-tree-compute-widths (undo-tree)
-  "Recursively compute widths for all UNDO-TREE's nodes."
-  (let ((stack (list (undo-tree-root undo-tree)))
+(defun undo-tree-compute-widths (node)
+  "Recursively compute widths for nodes below NODE."
+  (let ((stack (list node))
         res)
     (while stack
       ;; try to compute widths for node at top of stack
@@ -1992,11 +1992,11 @@ which is defined in the `warnings' library.\n")
       (vector lwidth cwidth rwidth))))
 
 
-(defun undo-tree-clear-visualizer-data (undo-tree)
-  ;; Clear visualizer data from UNDO-TREE.
+(defun undo-tree-clear-visualizer-data (node)
+  ;; Clear visualizer data below NODE.
   (undo-tree-mapc
-   (lambda (node) (undo-tree-node-clear-visualizer-data node))
-   undo-tree))
+   (lambda (n) (undo-tree-node-clear-visualizer-data n))
+   node))
 
 
 (defun undo-tree-node-saved-buffer-p (node &optional mtime)
@@ -2962,7 +2962,8 @@ without asking for confirmation."
   (when (and buffer-undo-tree (not (eq buffer-undo-tree t)))
     (condition-case nil
 	(undo-tree-kill-visualizer)
-      (error (undo-tree-clear-visualizer-data buffer-undo-tree)))
+      (error (undo-tree-clear-visualizer-data
+	      (undo-tree-root buffer-undo-tree))))
     (let ((buff (current-buffer))
 	  tree)
       ;; get filename
@@ -3102,7 +3103,9 @@ signaling an error if file is not found."
 	  (undo-tree-visualizer-calculate-spacing))
     (when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
     (undo-tree-visualizer-mode)
-    (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
+    (let ((inhibit-read-only t))
+      (undo-tree-draw-tree (undo-tree-root undo-tree)
+			   (undo-tree-current undo-tree)))))
 
 
 (defun undo-tree-kill-visualizer (&rest _dummy)
@@ -3115,41 +3118,48 @@ signaling an error if file is not found."
 
 
 
-(defun undo-tree-draw-tree (undo-tree)
-  ;; Draw UNDO-TREE in current buffer.
-  (erase-buffer)
-  (undo-tree-move-down 1)      ; top margin
-  (undo-tree-clear-visualizer-data undo-tree)
-  (undo-tree-compute-widths undo-tree)
-  (undo-tree-move-forward
-   (max (/ (window-width) 2)
-        (+ (undo-tree-node-char-lwidth (undo-tree-root undo-tree))
-           ;; add space for left part of left-most time-stamp
-           (if undo-tree-visualizer-timestamps
-	       (/ (- undo-tree-visualizer-spacing 4) 2)
-	     0)
-           2)))  ; left margin
-  ;; draw undo-tree
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
-        (stack (list (undo-tree-root undo-tree)))
-        (n (undo-tree-root undo-tree)))
-    ;; link root node to its representation in visualizer
-    (unless (markerp (undo-tree-node-marker n))
-      (setf (undo-tree-node-marker n) (make-marker))
-      (set-marker-insertion-type (undo-tree-node-marker n) nil))
-    (move-marker (undo-tree-node-marker n) (point))
-    ;; draw nodes from stack until stack is empty
-    (while stack
-      (setq n (pop stack))
-      (goto-char (undo-tree-node-marker n))
-      (setq n (undo-tree-draw-subtree n nil))
-      (setq stack (append stack n))))
-  ;; highlight active branch
-  (goto-char (undo-tree-node-marker (undo-tree-root undo-tree)))
-  (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
-    (undo-tree-highlight-active-branch (undo-tree-root undo-tree)))
-  ;; highlight current node
-  (undo-tree-draw-node (undo-tree-current undo-tree) 'current))
+(defun undo-tree-draw-tree (node current)
+  ;; Draw undo-tree in current buffer starting from NODE. CURRENT specifies
+  ;; the current node in the tree.
+  (let (seen-current)
+    (erase-buffer)
+    (undo-tree-move-down 1)      ; top margin
+    (undo-tree-clear-visualizer-data node)
+    (undo-tree-compute-widths node)
+    (undo-tree-move-forward
+     (max (/ (window-width) 2)
+	  (+ (undo-tree-node-char-lwidth node)
+	     ;; add space for left part of left-most time-stamp
+	     (if undo-tree-visualizer-timestamps
+		 (/ (- undo-tree-visualizer-spacing 4) 2)
+	       0)
+	     2)))  ; left margin
+    ;; draw undo-tree
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-default-face)
+	  (cur-stack (list node))
+	  next-stack
+	  (n node))
+      ;; flag to indicate if current node was drawn
+      (setq seen-current (eq node current))
+      ;; link starting node to its representation in visualizer
+      (unless (markerp (undo-tree-node-marker n))
+	(setf (undo-tree-node-marker n) (make-marker))
+	(set-marker-insertion-type (undo-tree-node-marker n) nil))
+      (move-marker (undo-tree-node-marker n) (point))
+      ;; draw nodes from current layer
+      (while (or cur-stack (prog1 (setq cur-stack next-stack)
+			     (setq next-stack nil)))
+	(setq n (pop cur-stack)
+	      seen-current (or seen-current (eq n current)))
+	(goto-char (undo-tree-node-marker n))
+	(setq n (undo-tree-draw-subtree n nil)
+	      next-stack (nconc n next-stack))))
+    ;; highlight active branch
+    (goto-char (undo-tree-node-marker node))
+    (let ((undo-tree-insert-face 'undo-tree-visualizer-active-branch-face))
+      (undo-tree-highlight-active-branch node))
+    ;; highlight current node if drawn
+    (when seen-current (undo-tree-draw-node current 'current))))
 
 
 (defun undo-tree-highlight-active-branch (node)
@@ -3224,7 +3234,6 @@ signaling an error if file is not found."
 (defun undo-tree-draw-subtree (node &optional active-branch)
   ;; Draw subtree rooted at NODE. The subtree will start from point.
   ;; If ACTIVE-BRANCH is non-nil, just draw active branch below NODE.
-  ;; If TIMESTAP is non-nil, draw time-stamps instead of "o" at nodes.
   (let ((num-children (length (undo-tree-node-next node)))
         node-list pos trunk-pos n)
     ;; draw node itself
@@ -3404,11 +3413,28 @@ signaling an error if file is not found."
 (defun undo-tree-move-forward (&optional arg)
   ;; Move forward, extending buffer if necessary.
   (unless arg (setq arg 1))
-  (let ((n (- (line-end-position) (point))))
-    (if (> n arg)
-        (forward-char arg)
-      (end-of-line)
-      (insert (make-string (- arg n) ? )))))
+  (let (n)
+    (cond
+     ((>= arg 0)
+      (setq n (- (line-end-position) (point)))
+      (if (> n arg)
+	  (forward-char arg)
+	(end-of-line)
+	(insert (make-string (- arg n) ? ))))
+     ((< arg 0)
+      (setq arg (- arg))
+      (setq n (- (point) (line-beginning-position)))
+      (when (< n arg)
+	;; no space left - shift entire buffer contents right!
+	(let ((pos (make-marker)))
+	  (set-marker-insertion-type pos t)
+	  (move-marker pos (point))
+	  (goto-char (point-min))
+	  (while (not (eobp))
+	    (insert (make-string (- arg n) ? ))
+	    (forward-line 1))
+	  (goto-char pos)))
+      (backward-char arg)))))
 
 
 (defun undo-tree-timestamp-to-string
@@ -3555,7 +3581,7 @@ using `undo-tree-redo' or `undo-tree-visualizer-redo'."
 (defun undo-tree-visualizer-quit ()
   "Quit the undo-tree visualizer."
   (interactive)
-  (undo-tree-clear-visualizer-data buffer-undo-tree)
+  (undo-tree-clear-visualizer-data (undo-tree-root buffer-undo-tree))
   ;; remove kill visualizer hook from parent buffer
   (unwind-protect
       (with-current-buffer undo-tree-visualizer-parent-buffer
@@ -3593,7 +3619,9 @@ at POS, or point if POS is nil."
       (let ((undo-tree-inhibit-kill-visualizer t)) (undo-tree-set node))
       (switch-to-buffer-other-window undo-tree-visualizer-buffer-name)
       ;; re-draw undo tree
-      (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree))
+      (let ((inhibit-read-only t))
+	(undo-tree-draw-tree (undo-tree-root buffer-undo-tree)
+			     (undo-tree-current buffer-undo-tree)))
       (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))))
 
 
@@ -3681,7 +3709,9 @@ a negative prefix argument specifies `register'."
   (setq undo-tree-visualizer-timestamps (not undo-tree-visualizer-timestamps))
   (setq undo-tree-visualizer-spacing (undo-tree-visualizer-calculate-spacing))
   ;; redraw tree
-  (let ((inhibit-read-only t)) (undo-tree-draw-tree buffer-undo-tree)))
+  (let ((inhibit-read-only t))
+    (undo-tree-draw-tree (undo-tree-root buffer-undo-tree)
+			 (undo-tree-current buffer-undo-tree))))
 
 
 (defun undo-tree-visualizer-scroll-left (&optional arg)
