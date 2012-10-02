@@ -852,13 +852,13 @@ Undo-tree history is saved to a file called
 file itself.
 
 WARNING! `undo-tree-auto-save-history' will not work properly in
-Emacs versions prior to 24.1.50.1, so it cannot be enabled via
+Emacs versions prior to 24.3, so it cannot be enabled via
 the customization interface in versions earlier than that one. To
 ignore this warning and enable it regardless, set
 `undo-tree-auto-save-history' to a non-nil value outside of
 customize."
   :group 'undo-tree
-  :type (if (version-list-< (version-to-list emacs-version) '(24 1 50 1))
+  :type (if (version-list-< (version-to-list emacs-version) '(24 3))
 	    '(choice (const :tag "<disabled>" nil))
 	  'boolean))
 
