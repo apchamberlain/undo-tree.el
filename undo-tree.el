@@ -1284,13 +1284,13 @@ in visualizer."
   (let ((len (length (undo-tree-make-visualizer-data))))
     `(and (vectorp ,v) (= (length ,v) ,len))))
 
-(defmacro undo-tree-node-clear-visualizer-data (node)
-  `(setf (undo-tree-node-meta-data ,node)
-	 (delq nil
-	       (delq :visualizer
-		     (plist-put (undo-tree-node-meta-data ,node)
-				:visualizer nil)))))
-
+(defun undo-tree-node-clear-visualizer-data (node)
+  (let ((plist (undo-tree-node-meta-data node)))
+    (if (eq (car plist) :visualizer)
+	(setf (undo-tree-node-meta-data node) (nthcdr 2 plist))
+      (while (and plist (not (eq (cadr plist) :visualizer)))
+	(setq plist (cdr plist)))
+      (if plist (setcdr plist (nthcdr 3 plist))))))
 
 (defmacro undo-tree-node-lwidth (node)
   `(let ((v (plist-get (undo-tree-node-meta-data ,node) :visualizer)))
