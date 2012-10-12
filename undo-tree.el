@@ -727,7 +727,7 @@
 (require 'diff)
 
 
-
+
 ;;; =====================================================================
 ;;;              Compatibility hacks for older Emacsen
 
@@ -819,7 +819,7 @@
 
 
 
-
+
 ;;; =====================================================================
 ;;;              Global variables and customization options
 
@@ -998,17 +998,13 @@ in visualizer."
 (add-to-list 'debug-ignored-errors "^No further redo information")
 
 
-
-
-;;; =================================================================
-;;;                 Install history-auto-save hooks
-
+;; Install history-auto-save hooks
 (add-hook 'write-file-functions 'undo-tree-save-history-hook)
 (add-hook 'find-file-hook 'undo-tree-load-history-hook)
 
 
 
-
+
 ;;; =================================================================
 ;;;                     Setup default keymaps
 
@@ -1141,7 +1137,7 @@ in visualizer."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                     Undo-tree data structure
 
@@ -1372,7 +1368,7 @@ in visualizer."
 
 
 
-
+
 ;;; =====================================================================
 ;;;              Basic undo-tree data structure functions
 
@@ -1501,7 +1497,7 @@ Comparison is done with `eq'."
 
 
 
-
+
 ;;; =====================================================================
 ;;;    Utility functions for handling `buffer-undo-list' and changesets
 
@@ -1708,7 +1704,7 @@ Comparison is done with `eq'."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                  History discarding functions
 
@@ -1875,7 +1871,7 @@ which is defined in the `warnings' library.\n")
 
 
 
-
+
 ;;; =====================================================================
 ;;;                 Visualizer-related functions
 
@@ -1975,7 +1971,7 @@ which is defined in the `warnings' library.\n")
 
 
 
-
+
 ;;; =====================================================================
 ;;;                     Undo-in-region functions
 
@@ -2469,7 +2465,7 @@ of either NODE itself or some node above it in the tree."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                        Undo-tree commands
 
@@ -2879,7 +2875,7 @@ Argument is a character, naming the register."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                       Persistent storage
 
@@ -3022,7 +3018,7 @@ signaling an error if file is not found."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                       Undo-tree visualizer
 
@@ -3401,7 +3397,7 @@ signaling an error if file is not found."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                    Visualizer mode commands
 
@@ -3569,7 +3565,7 @@ at mouse event POS."
 
 
 
-
+
 ;;; =====================================================================
 ;;;                    Visualizer selection mode
 
@@ -3639,7 +3635,7 @@ at mouse event POS."
     (when (and undo-tree-visualizer-diff node
 	       (not (eq node undo-tree-visualizer-selected-node)))
       (undo-tree-visualizer-update-diff node))
-    (setq undo-tree-visualizer-selected-node node)))
+    (when node (setq undo-tree-visualizer-selected-node node))))
 
 
 (defun undo-tree-visualizer-select-left (&optional arg)
@@ -3660,10 +3656,10 @@ at mouse event POS."
     (when (and undo-tree-visualizer-diff node
 	       (not (eq node undo-tree-visualizer-selected-node)))
       (undo-tree-visualizer-update-diff node))
-    (setq undo-tree-visualizer-selected-node node)))
+    (when node (setq undo-tree-visualizer-selected-node node))))
 
 
-
+
 ;;; =====================================================================
 ;;;                      Visualizer diff display
 
