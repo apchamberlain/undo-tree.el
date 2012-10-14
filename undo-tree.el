@@ -1,4 +1,4 @@
-;;; undo-tree.el --- Treat undo history as a tree
+;;; undo-tree.el --- Treat undo history as a tree  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
@@ -751,7 +751,7 @@
 
 ;; `registerv' defstruct isn't defined in Emacs versions < 24
 (unless (fboundp 'registerv-make)
-  (defmacro registerv-make (data &rest dummy) data))
+  (defmacro registerv-make (data &rest _dummy) data))
 
 (unless (fboundp 'registerv-data)
   (defmacro registerv-data (data) data))
@@ -1008,6 +1008,9 @@ in visualizer."
 ;; dynamically bound to t when undoing from visualizer, to inhibit
 ;; `undo-tree-kill-visualizer' hook function in parent buffer
 (defvar undo-tree-inhibit-kill-visualizer nil)
+
+;; can be let-bound to a face name, to set face used in drawing functions
+(defvar undo-tree-insert-face nil)
 
 
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
@@ -1925,8 +1928,7 @@ which is defined in the `warnings' library.\n")
   ;; (in a vector) if successful. Otherwise, returns a node whose widths need
   ;; calculating before NODE's can be calculated.
   (let ((num-children (length (undo-tree-node-next node)))
-        (lwidth 0) (cwidth 0) (rwidth 0)
-        p w)
+        (lwidth 0) (cwidth 0) (rwidth 0) p)
     (catch 'need-widths
       (cond
        ;; leaf nodes have 0 width
@@ -2022,6 +2024,10 @@ which is defined in the `warnings' library.\n")
 
 ;;; =====================================================================
 ;;;                     Undo-in-region functions
+
+;; `undo-elt-in-region' uses this as a dynamically-scoped variable
+(defvar undo-adjusted-markers nil)
+
 
 (defun undo-tree-pull-undo-in-region-branch (start end)
   ;; Pull out entries from undo changesets to create a new undo-in-region
@@ -2172,7 +2178,7 @@ which is defined in the `warnings' library.\n")
 	  (setq node (undo-tree-node-previous node))))
 
       ;; pop dummy nil from front of `region-changeset'
-      (pop region-changeset)
+      (setq region-changeset (cdr region-changeset))
 
 
       ;; --- integrate branch into tree ---
@@ -2384,7 +2390,7 @@ which is defined in the `warnings' library.\n")
 	  (setq node (car (undo-tree-node-next node)))))
 
       ;; pop dummy nil from front of `region-changeset'
-      (pop region-changeset)
+      (setq region-changeset (cdr region-changeset))
 
 
       ;; --- integrate branch into tree ---
@@ -2871,10 +2877,10 @@ using `undo-tree-redo'."
       (setq n (undo-tree-node-previous n)))
     ;; ascend tree until intersection node
     (while (not (eq (undo-tree-current buffer-undo-tree) n))
-      (undo-tree-undo-1))
+      (undo-tree-undo-1 nil nil preserve-timestamps))
     ;; descend tree until selected node
     (while (not (eq (undo-tree-current buffer-undo-tree) node))
-      (undo-tree-redo-1))
+      (undo-tree-redo-1 nil nil preserve-timestamps))
     n))  ; return intersection node
 
 
@@ -3018,7 +3024,7 @@ signaling an error if file is not found."
 	  (throw 'load-error nil)
 	(error "File \"%s\" does not exist; could not load undo-tree history"
 	       filename)))
-    (let (buff tmp hash tree)
+    (let (buff hash tree)
       (setq buff (current-buffer))
       (with-auto-compression-mode
 	(with-temp-buffer
@@ -3099,7 +3105,7 @@ signaling an error if file is not found."
     (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
 
 
-(defun undo-tree-kill-visualizer (&rest dummy)
+(defun undo-tree-kill-visualizer (&rest _dummy)
   ;; Kill visualizer. Added to `before-change-functions' hook of original
   ;; buffer when visualizer is invoked.
   (unless undo-tree-inhibit-kill-visualizer
