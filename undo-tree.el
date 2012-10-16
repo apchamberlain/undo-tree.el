@@ -118,6 +118,15 @@
 ;; <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
 ;;   Switch to next undo-tree branch.
 ;;
+;; C-<up>  M-{  (`undo-tree-visualize-undo-to-x')
+;;   Undo changes up to last branch point.
+;;
+;; C-<down>  M-}  (`undo-tree-visualize-redo-to-x')
+;;   Redo changes down to next branch point.
+;;
+;; <down>  n  C-n  (`undo-tree-visualize-redo')
+;;   Redo changes.
+;;
 ;; <mouse-1>  (`undo-tree-visualizer-mouse-set')
 ;;   Set state to node at mouse click.
 ;;
@@ -994,8 +1003,9 @@ in visualizer."
 (defconst undo-tree-visualizer-buffer-name " *undo-tree*")
 (defconst undo-tree-diff-buffer-name "*undo-tree Diff*")
 
-;; prevent debugger being called on "No further redo information"
+;; prevent debugger being called on "No further redo information" errors
 (add-to-list 'debug-ignored-errors "^No further redo information")
+(add-to-list 'debug-ignored-errors "^No further redo information for region")
 
 
 ;; Install history-auto-save hooks
@@ -1058,6 +1068,13 @@ in visualizer."
     (define-key map [left] 'undo-tree-visualize-switch-branch-left)
     (define-key map "b" 'undo-tree-visualize-switch-branch-left)
     (define-key map "\C-b" 'undo-tree-visualize-switch-branch-left)
+    ;; paragraph motion keys undo/redo to significant points in tree
+    (define-key map [remap backward-paragraph] 'undo-tree-visualize-undo-to-x)
+    (define-key map [remap forward-paragraph] 'undo-tree-visualize-redo-to-x)
+    (define-key map "\M-{" 'undo-tree-visualize-undo-to-x)
+    (define-key map "\M-}" 'undo-tree-visualize-redo-to-x)
+    (define-key map [C-down] 'undo-tree-visualize-undo-to-x)
+    (define-key map [C-up] 'undo-tree-visualize-redo-to-x)
     ;; mouse sets buffer state to node at click
     (define-key map [mouse-1] 'undo-tree-visualizer-mouse-set)
     ;; toggle timestamps
@@ -3547,6 +3564,63 @@ at POS, or point if POS is nil."
 at mouse event POS."
   (interactive "@e")
   (undo-tree-visualizer-set (event-start (nth 1 pos))))
+
+
+(defun undo-tree-visualize-undo-to-x (&optional x)
+  "Undo to last branch point or register.
+If X is 'branch, undo to last branch point ignoring registers. If
+X is 'register, undo to last register, ignoring branch points.
+
+Interactively, a positive prefix argument specifies `branch', and
+a negative prefix argument specifies `register'."
+  (interactive "P")
+  (when (and (called-interactively-p 'any) x)
+    (setq x (prefix-numeric-value x)
+	  x (if (> x 0) 'branch 'register)))
+  (let ((current (undo-tree-current buffer-undo-tree))
+	r)
+    (while (and (undo-tree-node-previous current)
+		(or (undo-tree-visualize-undo) t)
+		(setq current (undo-tree-current buffer-undo-tree))
+		;; branch point
+		(not (or (and (or (null x) (eq x 'branch))
+			      (> (undo-tree-num-branches) 1))
+			 ;; register
+			 (and (or (null x) (eq x 'register))
+			      (setq r (undo-tree-node-register current))
+			      (undo-tree-register-data-p
+			       (setq r (registerv-data (get-register r))))
+			      (eq current (undo-tree-register-data-node r)))
+			 ))))))
+
+
+(defun undo-tree-visualize-redo-to-x (&optional x)
+  "Redo to next branch point or register.
+If X is the symbol `branch', redo to next branch point ignoring
+registers. If X is the symbol 'register', redo to next register,
+ignoring branch points.
+
+Interactively, a positive prefix argument specifies `branch', and
+a negative prefix argument specifies `register'."
+  (interactive "P")
+  (when (and (called-interactively-p 'any) x)
+    (setq x (prefix-numeric-value x)
+	  x (if (> x 0) 'branch 'register)))
+  (let ((current (undo-tree-current buffer-undo-tree))
+	r)
+    (while (and (undo-tree-node-next current)
+		(or (undo-tree-visualize-redo) t)
+		(setq current (undo-tree-current buffer-undo-tree))
+		;; branch point
+		(not (or (and (or (null x) (eq x 'branch))
+			      (> (undo-tree-num-branches) 1))
+			 ;; register
+			 (and (or (null x) (eq x 'register))
+			      (setq r (undo-tree-node-register current))
+			      (undo-tree-register-data-p
+			       (setq r (registerv-data (get-register r))))
+			      (eq current (undo-tree-register-data-node r)))
+			 ))))))
 
 
 (defun undo-tree-visualizer-toggle-timestamps ()
