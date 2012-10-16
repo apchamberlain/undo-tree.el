@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.5.5
+;; Version: 0.5.6
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -3120,6 +3120,8 @@ signaling an error if file is not found."
   (let ((register (undo-tree-node-register node))
 	node-string)
     (unless (and register
+		 (undo-tree-register-data-p
+		  (registerv-data (get-register register)))
 		 (eq node (undo-tree-register-data-node
 			   (registerv-data (get-register register)))))
       (setq register nil))
@@ -3132,22 +3134,24 @@ signaling an error if file is not found."
 	     (undo-tree-node-timestamp node)
 	     undo-tree-visualizer-relative-timestamps
 	     current register))
-	   (current "x")
 	   (register (char-to-string register))
+	   (current "x")
 	   (t "o")))
 
     (cond
-     (current
+     (register
       (let ((undo-tree-insert-face
-             (cons 'undo-tree-visualizer-current-face
+             (cons (if current
+		       'undo-tree-visualizer-current-face
+		     'undo-tree-visualizer-register-face)
                    (and (boundp 'undo-tree-insert-face)
                         (or (and (consp undo-tree-insert-face)
                                  undo-tree-insert-face)
                             (list undo-tree-insert-face))))))
         (undo-tree-insert node-string)))
-     (register
+     (current
       (let ((undo-tree-insert-face
-             (cons 'undo-tree-visualizer-register-face
+             (cons 'undo-tree-visualizer-current-face
                    (and (boundp 'undo-tree-insert-face)
                         (or (and (consp undo-tree-insert-face)
                                  undo-tree-insert-face)
