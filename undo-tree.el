@@ -2907,7 +2907,7 @@ backup doesn't exist, it is created."
   (let* ((backup-directory-alist undo-tree-history-directory-alist)
 	 (name (make-backup-file-name-1 file)))
     (concat (file-name-directory name) "." (file-name-nondirectory name)
-	    ".~undo-tree~")))
+	    "~undo-tree~")))
 
 
 (defun undo-tree-save-history (&optional filename overwrite)
