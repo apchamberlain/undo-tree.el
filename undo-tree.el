@@ -971,16 +971,26 @@ within the current region."
 in visualizer."
   :group 'undo-tree)
 
+(defface undo-tree-visualizer-unmodified-face
+  '((((class color)) :foreground "cyan"))
+  "Face used to highlight nodes corresponding to unmodified buffers
+in visualizer."
+  :group 'undo-tree)
+
 
 (defvar undo-tree-visualizer-parent-buffer nil
   "Parent buffer in visualizer.")
 (make-variable-buffer-local 'undo-tree-visualizer-parent-buffer)
 
+;; stores modification time of parent buffer's file, if any
+(defvar undo-tree-visualizer-parent-mtime nil)
+(make-variable-buffer-local 'undo-tree-visualizer-parent-mtime)
+
 ;; stores current horizontal spacing needed for drawing undo-tree
 (defvar undo-tree-visualizer-spacing nil)
 (make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
-;; calculate horizontal spacing required for drawing undo-tree with current
+;; calculate horizontal spacing required for drawing tree with current
 ;; settings
 (defsubst undo-tree-visualizer-calculate-spacing ()
   (if undo-tree-visualizer-timestamps
@@ -1985,6 +1995,27 @@ which is defined in the `warnings' library.\n")
   (undo-tree-mapc
    (lambda (node) (undo-tree-node-clear-visualizer-data node))
    undo-tree))
+
+
+(defun undo-tree-node-saved-buffer-p (node &optional mtime)
+  ;; Return non-nil if NODE corresponds to a saved buffer state (not
+  ;; necessarily the current saved state). If a file modification time MTIME
+  ;; is specified, also check that the changeset's modification time
+  ;; corresponds to MTIME.
+  (let (changeset ntime)
+    (setq changeset
+	  (or (undo-tree-node-redo node)
+	      (and (setq changeset (car (undo-tree-node-next node)))
+		   (undo-tree-node-undo changeset)))
+	  ntime
+	  (catch 'found
+	    (dolist (elt changeset)
+	      (when (and (consp elt) (eq (car elt) t)
+			 (throw 'found (cdr elt)))))))
+    (and ntime
+	 (or (null mtime)
+	     (and (= (car ntime)  (car mtime))
+		  (= (cdr ntime) (cadr mtime)))))))
 
 
 
@@ -3056,6 +3087,9 @@ signaling an error if file is not found."
     (switch-to-buffer-other-window
      (get-buffer-create undo-tree-visualizer-buffer-name))
     (setq undo-tree-visualizer-parent-buffer buff)
+    (setq undo-tree-visualizer-parent-mtime
+	  (and (buffer-file-name buff)
+	       (nth 5 (file-attributes (buffer-file-name buff)))))
     (setq buffer-undo-tree undo-tree)
     (setq undo-tree-visualizer-initial-node (undo-tree-current undo-tree))
     (setq undo-tree-visualizer-spacing
@@ -3129,56 +3163,54 @@ signaling an error if file is not found."
 
 
 (defun undo-tree-draw-node (node &optional current)
-  ;; Draw symbol representing NODE in visualizer.
+  ;; Draw symbol representing NODE in visualizer. If CURRENT is non-nil, node
+  ;; is current node.
   (goto-char (undo-tree-node-marker node))
   (when undo-tree-visualizer-timestamps
     (backward-char (/ undo-tree-visualizer-spacing 2)))
 
-  (let ((register (undo-tree-node-register node))
+  (let* ((undo-tree-insert-face (and (boundp 'undo-tree-insert-face)
+				     (or (and (consp undo-tree-insert-face)
+					      undo-tree-insert-face)
+					 (list undo-tree-insert-face))))
+	 (register (undo-tree-node-register node))
+	 (unmodified (and undo-tree-visualizer-parent-mtime
+			  (undo-tree-node-saved-buffer-p
+			   node undo-tree-visualizer-parent-mtime)))
 	node-string)
+    ;; check node's register (if any) still stores appropriate undo-tree state
     (unless (and register
 		 (undo-tree-register-data-p
 		  (registerv-data (get-register register)))
 		 (eq node (undo-tree-register-data-node
 			   (registerv-data (get-register register)))))
       (setq register nil))
-    ;; represent node by differentl symbols, depending on whether it's the
-    ;; current node or is saved in a register
+    ;; represent node by different symbols, depending on whether it's the
+    ;; current node, is saved in a register, or corresponds to an unmodified
+    ;; buffer
     (setq node-string
-	  (cond
-	   (undo-tree-visualizer-timestamps
-	    (undo-tree-timestamp-to-string
-	     (undo-tree-node-timestamp node)
-	     undo-tree-visualizer-relative-timestamps
-	     current register))
-	   (register (char-to-string register))
-	   (current "x")
-	   (t "o")))
-
-    (cond
-     (register
-      (let ((undo-tree-insert-face
-             (cons (if current
-		       'undo-tree-visualizer-current-face
-		     'undo-tree-visualizer-register-face)
-                   (and (boundp 'undo-tree-insert-face)
-                        (or (and (consp undo-tree-insert-face)
-                                 undo-tree-insert-face)
-                            (list undo-tree-insert-face))))))
-        (undo-tree-insert node-string)))
-     (current
-      (let ((undo-tree-insert-face
-             (cons 'undo-tree-visualizer-current-face
-                   (and (boundp 'undo-tree-insert-face)
-                        (or (and (consp undo-tree-insert-face)
-                                 undo-tree-insert-face)
-                            (list undo-tree-insert-face))))))
-        (undo-tree-insert node-string)))
-     (t (undo-tree-insert node-string)))
-
-    (backward-char (if undo-tree-visualizer-timestamps
-		       (1+ (/ undo-tree-visualizer-spacing 2))
-		     1))
+	    (cond
+	     (undo-tree-visualizer-timestamps
+	        (undo-tree-timestamp-to-string
+	         (undo-tree-node-timestamp node)
+		 undo-tree-visualizer-relative-timestamps
+		 current register))
+	     (register (char-to-string register))
+	     (unmodified "s")
+	     (current "x")
+	     (t "o"))
+	  undo-tree-insert-face
+	    (cons
+	     (cond
+	      (current    'undo-tree-visualizer-current-face)
+	      (unmodified 'undo-tree-visualizer-unmodified-face)
+	      (register   'undo-tree-visualizer-register-face))
+	     undo-tree-insert-face))
+    ;; draw node and link it to its representation in visualizer
+    (undo-tree-insert node-string)
+    (undo-tree-move-backward (if undo-tree-visualizer-timestamps
+				 (1+ (/ undo-tree-visualizer-spacing 2))
+			       1))
     (move-marker (undo-tree-node-marker node) (point))
     (put-text-property (point) (1+ (point)) 'undo-tree-node node)))
 
@@ -3567,22 +3599,27 @@ at mouse event POS."
 
 
 (defun undo-tree-visualize-undo-to-x (&optional x)
-  "Undo to last branch point or register.
-If X is 'branch, undo to last branch point ignoring registers. If
-X is 'register, undo to last register, ignoring branch points.
+  "Undo to last branch point, register, or saved state.
+If X is 'branch, undo to last branch point. If X is 'register,
+undo to last register. If X is 'saved, undo to last saved state.
 
-Interactively, a positive prefix argument specifies `branch', and
-a negative prefix argument specifies `register'."
+Interactively, a single \\[universal-argument] specifies
+`branch', a double \\[universal-argument] \[universal-argument]
+spcified `saved', and a negative prefix argument specifies
+`register'."
   (interactive "P")
   (when (and (called-interactively-p 'any) x)
     (setq x (prefix-numeric-value x)
-	  x (if (> x 0) 'branch 'register)))
+	  x (cond
+	     ((< x 0)  'register)
+	     ((<= x 4) 'branch)
+	     (t        'saved))))
   (let ((current (undo-tree-current buffer-undo-tree))
 	r)
     (while (and (undo-tree-node-previous current)
 		(or (undo-tree-visualize-undo) t)
 		(setq current (undo-tree-current buffer-undo-tree))
-		;; branch point
+		         ;; branch point
 		(not (or (and (or (null x) (eq x 'branch))
 			      (> (undo-tree-num-branches) 1))
 			 ;; register
@@ -3591,6 +3628,9 @@ a negative prefix argument specifies `register'."
 			      (undo-tree-register-data-p
 			       (setq r (registerv-data (get-register r))))
 			      (eq current (undo-tree-register-data-node r)))
+			 ;; saved state
+			 (and (or (null x) (eq x 'saved))
+			      (undo-tree-node-saved-buffer-p current))
 			 ))))))
 
 
@@ -3605,13 +3645,16 @@ a negative prefix argument specifies `register'."
   (interactive "P")
   (when (and (called-interactively-p 'any) x)
     (setq x (prefix-numeric-value x)
-	  x (if (> x 0) 'branch 'register)))
+	  x (cond
+	     ((< x 0)  'register)
+	     ((<= x 4) 'branch)
+	     (t        'saved))))
   (let ((current (undo-tree-current buffer-undo-tree))
 	r)
     (while (and (undo-tree-node-next current)
 		(or (undo-tree-visualize-redo) t)
 		(setq current (undo-tree-current buffer-undo-tree))
-		;; branch point
+		         ;; branch point
 		(not (or (and (or (null x) (eq x 'branch))
 			      (> (undo-tree-num-branches) 1))
 			 ;; register
@@ -3620,6 +3663,9 @@ a negative prefix argument specifies `register'."
 			      (undo-tree-register-data-p
 			       (setq r (registerv-data (get-register r))))
 			      (eq current (undo-tree-register-data-node r)))
+			 ;; saved state
+			 (and (or (null x) (eq x 'saved))
+			      (undo-tree-node-saved-buffer-p current))
 			 ))))))
 
 
