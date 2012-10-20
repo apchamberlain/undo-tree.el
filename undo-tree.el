@@ -2037,11 +2037,10 @@ which is defined in the `warnings' library.\n")
    (undo-tree-root tree)))
 
 
-(defun undo-tree-node-saved-buffer-p (node &optional mtime)
-  ;; Return non-nil if NODE corresponds to a saved buffer state (not
-  ;; necessarily the current saved state). If a file modification time MTIME
-  ;; is specified, also check that the changeset's modification time
-  ;; corresponds to MTIME.
+(defun undo-tree-node-unmodified-p (node &optional mtime)
+  ;; Return non-nil if NODE corresponds to a buffer state that once upon a
+  ;; time was unmodified. If a file modification time MTIME is specified,
+  ;; return non-nil if the buffer state really is unmodified.
   (let (changeset ntime)
     (setq changeset
 	  (or (undo-tree-node-redo node)
@@ -2054,8 +2053,12 @@ which is defined in the `warnings' library.\n")
 			 (throw 'found (cdr elt)))))))
     (and ntime
 	 (or (null mtime)
-	     (and (= (car ntime)  (car mtime))
-		  (= (cdr ntime) (cadr mtime)))))))
+	     ;; high-precision timestamps
+	     (if (listp (cdr ntime))
+		 (equal ntime mtime)
+	       ;; old-style timestamps
+	       (and (= (car ntime) (car mtime))
+		    (= (cdr ntime) (cadr mtime))))))))
 
 
 
@@ -3387,9 +3390,10 @@ signaling an error if file is not found."
 					      undo-tree-insert-face)
 					 (list undo-tree-insert-face))))
 	 (register (undo-tree-node-register node))
-	 (unmodified (and undo-tree-visualizer-parent-mtime
-			  (undo-tree-node-saved-buffer-p
-			   node undo-tree-visualizer-parent-mtime)))
+	 (unmodified (if undo-tree-visualizer-parent-mtime
+			 (undo-tree-node-unmodified-p
+			  node undo-tree-visualizer-parent-mtime)
+		       (undo-tree-node-unmodified-p node)))
 	node-string)
     ;; check node's register (if any) still stores appropriate undo-tree state
     (unless (and register
@@ -3940,7 +3944,7 @@ spcified `saved', and a negative prefix argument specifies
 			      (eq current (undo-tree-register-data-node r)))
 			 ;; saved state
 			 (and (or (null x) (eq x 'saved))
-			      (undo-tree-node-saved-buffer-p current))
+			      (undo-tree-node-unmodified-p current))
 			 ))))))
 
 
@@ -3975,7 +3979,7 @@ a negative prefix argument specifies `register'."
 			      (eq current (undo-tree-register-data-node r)))
 			 ;; saved state
 			 (and (or (null x) (eq x 'saved))
-			      (undo-tree-node-saved-buffer-p current))
+			      (undo-tree-node-unmodified-p current))
 			 ))))))
 
 
