@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2012  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.6
+;; Version: 0.6.1
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -2040,7 +2040,7 @@ which is defined in the `warnings' library.\n")
 (defun undo-tree-node-unmodified-p (node &optional mtime)
   ;; Return non-nil if NODE corresponds to a buffer state that once upon a
   ;; time was unmodified. If a file modification time MTIME is specified,
-  ;; return non-nil if the buffer state really is unmodified.
+  ;; return non-nil if the corresponding buffer state really is unmodified.
   (let (changeset ntime)
     (setq changeset
 	  (or (undo-tree-node-redo node)
@@ -2049,7 +2049,7 @@ which is defined in the `warnings' library.\n")
 	  ntime
 	  (catch 'found
 	    (dolist (elt changeset)
-	      (when (and (consp elt) (eq (car elt) t)
+	      (when (and (consp elt) (eq (car elt) t) (consp (cdr elt))
 			 (throw 'found (cdr elt)))))))
     (and ntime
 	 (or (null mtime)
