@@ -1126,12 +1126,12 @@ in visualizer."
     (define-key map "d" 'undo-tree-visualizer-toggle-diff)
     ;; selection mode
     (define-key map "s" 'undo-tree-visualizer-selection-mode)
-    ;; horizontal scrolling may be needed if the tree wide
+    ;; horizontal scrolling may be needed if the tree is very wide
     (define-key map "," 'undo-tree-visualizer-scroll-left)
     (define-key map "." 'undo-tree-visualizer-scroll-right)
     (define-key map "<" 'undo-tree-visualizer-scroll-left)
     (define-key map ">" 'undo-tree-visualizer-scroll-right)
-    ;; vertical scrolling may be needed if the tree tall
+    ;; vertical scrolling may be needed if the tree is very tall
     (define-key map [next] 'undo-tree-visualizer-scroll-up)
     (define-key map [prior] 'undo-tree-visualizer-scroll-down)
     ;; quit/abort visualizer
