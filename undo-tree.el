@@ -940,7 +940,7 @@ Otherwise, display absolute times."
   "When non-nil, display time-stamps by default
 in undo-tree visualizer.
 
-\\<undo-tree-visualizer-map>You can always toggle time-stamps on and off \
+\\<undo-tree-visualizer-mode-map>You can always toggle time-stamps on and off \
 using \\[undo-tree-visualizer-toggle-timestamps], regardless of the
 setting of this variable."
   :group 'undo-tree
@@ -950,7 +950,7 @@ setting of this variable."
 (defcustom undo-tree-visualizer-diff nil
   "When non-nil, display diff by default in undo-tree visualizer.
 
-\\<undo-tree-visualizer-map>You can always toggle the diff display \
+\\<undo-tree-visualizer-mode-map>You can always toggle the diff display \
 using \\[undo-tree-visualizer-toggle-diff], regardless of the
 setting of this variable."
   :group 'undo-tree
@@ -1092,10 +1092,10 @@ in visualizer."
     (setq undo-tree-map map)))
 
 
-(defvar undo-tree-visualizer-map nil
+(defvar undo-tree-visualizer-mode-map nil
   "Keymap used in undo-tree visualizer.")
 
-(unless undo-tree-visualizer-map
+(unless undo-tree-visualizer-mode-map
   (let ((map (make-sparse-keymap)))
     ;; vertical motion keys undo/redo
     (define-key map [remap previous-line] 'undo-tree-visualize-undo)
@@ -1130,7 +1130,7 @@ in visualizer."
     (define-key map "t" 'undo-tree-visualizer-toggle-timestamps)
     ;; toggle diff
     (define-key map "d" 'undo-tree-visualizer-toggle-diff)
-    ;; selection mode
+    ;; toggle selection mode
     (define-key map "s" 'undo-tree-visualizer-selection-mode)
     ;; horizontal scrolling may be needed if the tree is very wide
     (define-key map "," 'undo-tree-visualizer-scroll-left)
@@ -1144,13 +1144,13 @@ in visualizer."
     (define-key map "q" 'undo-tree-visualizer-quit)
     (define-key map "\C-q" 'undo-tree-visualizer-abort)
     ;; set keymap
-    (setq undo-tree-visualizer-map map)))
+    (setq undo-tree-visualizer-mode-map map)))
 
 
-(defvar undo-tree-visualizer-selection-map nil
+(defvar undo-tree-visualizer-selection-mode-map nil
   "Keymap used in undo-tree visualizer selection mode.")
 
-(unless undo-tree-visualizer-selection-map
+(unless undo-tree-visualizer-selection-mode-map
   (let ((map (make-sparse-keymap)))
     ;; vertical motion keys move up and down tree
     (define-key map [remap previous-line]
@@ -1186,20 +1186,10 @@ in visualizer."
       (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
     (define-key map ">"
       (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
-    ;; mouse or <enter> sets buffer state to node at point/click
-    (define-key map "\r" 'undo-tree-visualizer-set)
-    (define-key map [mouse-1] 'undo-tree-visualizer-mouse-set)
-    ;; toggle timestamps
-    (define-key map "t" 'undo-tree-visualizer-toggle-timestamps)
     ;; toggle diff
     (define-key map "d" 'undo-tree-visualizer-selection-toggle-diff)
-    ;; quit visualizer selection mode
-    (define-key map "s" 'undo-tree-visualizer-mode)
-    ;; quit visualizer
-    (define-key map "q" 'undo-tree-visualizer-quit)
-    (define-key map "\C-q" 'undo-tree-visualizer-abort)
     ;; set keymap
-    (setq undo-tree-visualizer-selection-map map)))
+    (setq undo-tree-visualizer-selection-mode-map map)))
 
 
 
@@ -2585,7 +2575,7 @@ The following keys are available in `undo-tree-mode':
 
 Within the undo-tree visualizer, the following keys are available:
 
-  \\{undo-tree-visualizer-map}"
+  \\{undo-tree-visualizer-mode-map}"
 
   nil                       ; init value
   undo-tree-mode-lighter    ; lighter
@@ -3144,6 +3134,7 @@ signaling an error if file is not found."
 	(display-buffer-mark-dedicated 'soft))
     (switch-to-buffer-other-window
      (get-buffer-create undo-tree-visualizer-buffer-name))
+    (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq undo-tree-visualizer-parent-mtime
 	  (and (buffer-file-name buff)
@@ -3160,7 +3151,6 @@ signaling an error if file is not found."
 		  (>= (undo-tree-count undo-tree)
 		      undo-tree-visualizer-lazy-drawing))))
     (when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
-    (undo-tree-visualizer-mode)
     (let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
 
 
@@ -3766,7 +3756,8 @@ signaling an error if file is not found."
 ;;; =====================================================================
 ;;;                        Visualizer commands
 
-(defun undo-tree-visualizer-mode ()
+(define-derived-mode
+  undo-tree-visualizer-mode special-mode "undo-tree-visualizer"
   "Major mode used in undo-tree visualizer.
 
 The undo-tree visualizer can only be invoked from a buffer in
@@ -3777,14 +3768,11 @@ the parent buffer.
 
 Within the undo-tree visualizer, the following keys are available:
 
-  \\{undo-tree-visualizer-map}"
-  (interactive)
-  (setq major-mode 'undo-tree-visualizer-mode)
-  (setq mode-name "undo-tree-visualizer-mode")
-  (use-local-map undo-tree-visualizer-map)
+  \\{undo-tree-visualizer-mode-map}"
+  :syntax-table nil
+  :abbrev-table nil
   (setq truncate-lines t)
   (setq cursor-type nil)
-  (setq buffer-read-only t)
   (setq undo-tree-visualizer-selected-node nil)
   (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))
 
@@ -4060,20 +4048,28 @@ a negative prefix argument specifies `register'."
 ;;; =====================================================================
 ;;;                    Visualizer selection mode
 
-(defun undo-tree-visualizer-selection-mode ()
-  "Major mode used to select nodes in undo-tree visualizer."
-  (interactive)
-  (setq major-mode 'undo-tree-visualizer-selection-mode)
-  (setq mode-name "undo-tree-visualizer-selection-mode")
-  (use-local-map undo-tree-visualizer-selection-map)
-  (setq cursor-type 'box)
-  (setq undo-tree-visualizer-selected-node
-	(undo-tree-current buffer-undo-tree))
-  ;; erase diff (if any), as initially selected node is identical to current
-  (when undo-tree-visualizer-diff
-    (let ((buff (get-buffer undo-tree-diff-buffer-name))
-	  (inhibit-read-only t))
-      (when buff (with-current-buffer buff (erase-buffer))))))
+(define-minor-mode undo-tree-visualizer-selection-mode
+  "Toggle mode to select nodes in undo-tree visualizer."
+  :lighter "Select"
+  :keymap undo-tree-visualizer-selection-mode-map
+  :group undo-tree
+  (cond
+   ;; enable selection mode
+   (undo-tree-visualizer-selection-mode
+    (setq cursor-type 'box)
+    (setq undo-tree-visualizer-selected-node
+	  (undo-tree-current buffer-undo-tree))
+    ;; erase diff (if any), as initially selected node is identical to current
+    (when undo-tree-visualizer-diff
+      (let ((buff (get-buffer undo-tree-diff-buffer-name))
+	    (inhibit-read-only t))
+	(when buff (with-current-buffer buff (erase-buffer))))))
+   (t ;; disable selection mode
+    (setq cursor-type nil)
+    (setq undo-tree-visualizer-selected-node nil)
+    (goto-char (undo-tree-node-marker (undo-tree-current buffer-undo-tree)))
+    (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))
+   ))
 
 
 (defun undo-tree-visualizer-select-previous (&optional arg)
