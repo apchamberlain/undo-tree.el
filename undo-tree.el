@@ -965,7 +965,7 @@ drawing when the number of nodes in the tree is larger than this
 value.
 
 Lazy drawing means that only the visible portion of the tree will
-be drawn initially , and the tree will be extended later as
+be drawn initially, and the tree will be extended later as
 needed. For the most part, the only visible effect of this is to
 significantly speed up displaying the visualizer for very large
 trees.
@@ -3274,7 +3274,7 @@ signaling an error if file is not found."
 			 (< top (line-number-at-pos
 				 (undo-tree-node-marker node))))
 		    (and (null top)
-			 ;; NOTE: check point in case window-start is outdated
+			 ;; NOTE: we check point in case window-start is outdated
 			 (< (min (line-number-at-pos (point))
 				 (line-number-at-pos (window-start)))
 			    (line-number-at-pos
@@ -4211,14 +4211,15 @@ a negative prefix argument specifies `register'."
 		(current-buffer) tmpfile nil 'noasync
 		(get-buffer-create undo-tree-diff-buffer-name)))
     ;; delete process messages and useless headers from diff buffer
-    (with-current-buffer buff
-      (goto-char (point-min))
-      (delete-region (point) (1+ (line-end-position 3)))
-      (goto-char (point-max))
-      (forward-line -2)
-      (delete-region (point) (point-max))
-      (setq cursor-type nil)
-      (setq buffer-read-only t))
+    (let ((inhibit-read-only t))
+      (with-current-buffer buff
+	(goto-char (point-min))
+	(delete-region (point) (1+ (line-end-position 3)))
+	(goto-char (point-max))
+	(forward-line -2)
+	(delete-region (point) (point-max))
+	(setq cursor-type nil)
+	(setq buffer-read-only t)))
     buff))
 
 
