@@ -4197,8 +4197,8 @@ a negative prefix argument specifies `register'."
 
 
 (defun undo-tree-diff (&optional node)
-  ;; Create diff between current state and NODE (or previous state, if NODE is
-  ;; null). Returns buffer containing diff.
+  ;; Create diff between NODE and current state (or previous state and current
+  ;; state, if NODE is null). Returns buffer containing diff.
   (let (tmpfile buff)
     ;; generate diff
     (let ((undo-tree-inhibit-kill-visualizer t)
@@ -4208,7 +4208,7 @@ a negative prefix argument specifies `register'."
       (setq tmpfile (diff-file-local-copy (current-buffer)))
       (undo-tree-set current 'preserve-timestamps))
     (setq buff (diff-no-select
-		(current-buffer) tmpfile nil 'noasync
+		tmpfile (current-buffer) nil 'noasync
 		(get-buffer-create undo-tree-diff-buffer-name)))
     ;; delete process messages and useless headers from diff buffer
     (let ((inhibit-read-only t))
