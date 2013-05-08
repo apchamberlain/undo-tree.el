@@ -3933,13 +3933,20 @@ specifies `saved', and a negative prefix argument specifies
 	     ((< x 0)  'register)
 	     ((<= x 4) 'branch)
 	     (t        'saved))))
-  (let ((current (undo-tree-current buffer-undo-tree))
+  (let ((current (if undo-tree-visualizer-selection-mode
+		     undo-tree-visualizer-selected-node
+		   (undo-tree-current buffer-undo-tree)))
 	(diff undo-tree-visualizer-diff)
 	r)
     (undo-tree-visualizer-hide-diff)
     (while (and (undo-tree-node-previous current)
-		(or (undo-tree-visualize-undo) t)
-		(setq current (undo-tree-current buffer-undo-tree))
+		(or (if undo-tree-visualizer-selection-mode
+			(progn
+			  (undo-tree-visualizer-select-previous)
+			  (setq current undo-tree-visualizer-selected-node))
+		      (undo-tree-visualize-undo)
+		      (setq current (undo-tree-current buffer-undo-tree)))
+		    t)
 		         ;; branch point
 		(not (or (and (or (null x) (eq x 'branch))
 			      (> (undo-tree-num-branches) 1))
@@ -3974,13 +3981,20 @@ specifies `saved', and a negative prefix argument specifies
 	     ((< x 0)  'register)
 	     ((<= x 4) 'branch)
 	     (t        'saved))))
-  (let ((current (undo-tree-current buffer-undo-tree))
+  (let ((current (if undo-tree-visualizer-selection-mode
+		     undo-tree-visualizer-selected-node
+		   (undo-tree-current buffer-undo-tree)))
 	(diff undo-tree-visualizer-diff)
 	r)
     (undo-tree-visualizer-hide-diff)
     (while (and (undo-tree-node-next current)
-		(or (undo-tree-visualize-redo) t)
-		(setq current (undo-tree-current buffer-undo-tree))
+		(or (if undo-tree-visualizer-selection-mode
+			(progn
+			  (undo-tree-visualizer-select-next)
+			  (setq current undo-tree-visualizer-selected-node))
+		      (undo-tree-visualize-redo)
+		      (setq current (undo-tree-current buffer-undo-tree)))
+		    t)
 		         ;; branch point
 		(not (or (and (or (null x) (eq x 'branch))
 			      (> (undo-tree-num-branches) 1))
@@ -4088,7 +4102,7 @@ specifies `saved', and a negative prefix argument specifies
   (interactive "p")
   (let ((node undo-tree-visualizer-selected-node))
     (catch 'top
-      (dotimes (i arg)
+      (dotimes (i (or arg 1))
 	(unless (undo-tree-node-previous node) (throw 'top t))
 	(setq node (undo-tree-node-previous node))))
     ;; when using lazy drawing, extend tree upwards as required
@@ -4108,7 +4122,7 @@ specifies `saved', and a negative prefix argument specifies
   (interactive "p")
   (let ((node undo-tree-visualizer-selected-node))
     (catch 'bottom
-      (dotimes (i arg)
+      (dotimes (i (or arg 1))
 	(unless (nth (undo-tree-node-branch node) (undo-tree-node-next node))
 	  (throw 'bottom t))
 	(setq node
