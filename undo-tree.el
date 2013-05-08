@@ -1122,8 +1122,8 @@ in visualizer."
     (define-key map [remap forward-paragraph] 'undo-tree-visualize-redo-to-x)
     (define-key map "\M-{" 'undo-tree-visualize-undo-to-x)
     (define-key map "\M-}" 'undo-tree-visualize-redo-to-x)
-    (define-key map [C-down] 'undo-tree-visualize-undo-to-x)
-    (define-key map [C-up] 'undo-tree-visualize-redo-to-x)
+    (define-key map [C-up] 'undo-tree-visualize-undo-to-x)
+    (define-key map [C-down] 'undo-tree-visualize-redo-to-x)
     ;; mouse sets buffer state to node at click
     (define-key map [mouse-1] 'undo-tree-visualizer-mouse-set)
     ;; toggle timestamps
