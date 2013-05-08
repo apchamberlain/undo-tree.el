@@ -3917,12 +3917,14 @@ at mouse event POS."
 
 (defun undo-tree-visualize-undo-to-x (&optional x)
   "Undo to last branch point, register, or saved state.
-If X is 'branch, undo to last branch point. If X is 'register,
-undo to last register. If X is 'saved, undo to last saved state.
+If X is the symbol `branch', undo to last branch point. If X is
+the symbol `register', undo to last register. If X is the sumbol
+`saved', undo to last saved state. If X is null, undo to first of
+these that's encountered.
 
 Interactively, a single \\[universal-argument] specifies
-`branch', a double \\[universal-argument] \[universal-argument]
-spcified `saved', and a negative prefix argument specifies
+`branch', a double \\[universal-argument] \\[universal-argument]
+specifies `saved', and a negative prefix argument specifies
 `register'."
   (interactive "P")
   (when (and (called-interactively-p 'any) x)
@@ -3932,7 +3934,9 @@ spcified `saved', and a negative prefix argument specifies
 	     ((<= x 4) 'branch)
 	     (t        'saved))))
   (let ((current (undo-tree-current buffer-undo-tree))
+	(diff undo-tree-visualizer-diff)
 	r)
+    (undo-tree-visualizer-hide-diff)
     (while (and (undo-tree-node-previous current)
 		(or (undo-tree-visualize-undo) t)
 		(setq current (undo-tree-current buffer-undo-tree))
@@ -3948,17 +3952,21 @@ spcified `saved', and a negative prefix argument specifies
 			 ;; saved state
 			 (and (or (null x) (eq x 'saved))
 			      (undo-tree-node-unmodified-p current))
-			 ))))))
+			 ))))
+    (when diff (undo-tree-visualizer-show-diff))))
 
 
 (defun undo-tree-visualize-redo-to-x (&optional x)
-  "Redo to next branch point or register.
-If X is the symbol `branch', redo to next branch point ignoring
-registers. If X is the symbol 'register', redo to next register,
-ignoring branch points.
+  "Redo to last branch point, register, or saved state.
+If X is the symbol `branch', redo to last branch point. If X is
+the symbol `register', redo to last register. If X is the sumbol
+`saved', redo to last saved state. If X is null, redo to first of
+these that's encountered.
 
-Interactively, a positive prefix argument specifies `branch', and
-a negative prefix argument specifies `register'."
+Interactively, a single \\[universal-argument] specifies
+`branch', a double \\[universal-argument] \\[universal-argument]
+specifies `saved', and a negative prefix argument specifies
+`register'."
   (interactive "P")
   (when (and (called-interactively-p 'any) x)
     (setq x (prefix-numeric-value x)
@@ -3967,7 +3975,9 @@ a negative prefix argument specifies `register'."
 	     ((<= x 4) 'branch)
 	     (t        'saved))))
   (let ((current (undo-tree-current buffer-undo-tree))
+	(diff undo-tree-visualizer-diff)
 	r)
+    (undo-tree-visualizer-hide-diff)
     (while (and (undo-tree-node-next current)
 		(or (undo-tree-visualize-redo) t)
 		(setq current (undo-tree-current buffer-undo-tree))
@@ -3983,7 +3993,8 @@ a negative prefix argument specifies `register'."
 			 ;; saved state
 			 (and (or (null x) (eq x 'saved))
 			      (undo-tree-node-unmodified-p current))
-			 ))))))
+			 ))))
+    (when diff (undo-tree-visualizer-show-diff))))
 
 
 (defun undo-tree-visualizer-toggle-timestamps ()
