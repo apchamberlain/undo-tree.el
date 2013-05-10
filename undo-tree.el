@@ -1186,6 +1186,10 @@ in visualizer."
       (lambda () (interactive) (undo-tree-visualizer-select-left 10)))
     (define-key map ">"
       (lambda () (interactive) (undo-tree-visualizer-select-right 10)))
+    ;; <enter> sets buffer state to node at point
+    (define-key map "\r" 'undo-tree-visualizer-set)
+    ;; mouse selects node at click
+    (define-key map [mouse-1] 'undo-tree-visualizer-mouse-select)
     ;; toggle diff
     (define-key map "d" 'undo-tree-visualizer-selection-toggle-diff)
     ;; set keymap
@@ -4135,7 +4139,7 @@ specifies `saved', and a negative prefix argument specifies
 	  (throw 'bottom t))
 	(setq node
 	      (nth (undo-tree-node-branch node) (undo-tree-node-next node)))))
-    ;; when using lazy drawing, extend tree upwards as required
+    ;; when using lazy drawing, extend tree downwards as required
     (when undo-tree-visualizer-lazy-drawing
       (undo-tree-expand-down undo-tree-visualizer-selected-node node))
     ;; update diff display, if any
@@ -4187,6 +4191,31 @@ specifies `saved', and a negative prefix argument specifies
 	       (not (eq node undo-tree-visualizer-selected-node)))
       (undo-tree-visualizer-update-diff node))
     (when node (setq undo-tree-visualizer-selected-node node))))
+
+
+(defun undo-tree-visualizer-select (pos)
+  (let ((node (get-text-property pos 'undo-tree-node)))
+    (when node
+      ;; select node at POS
+      (goto-char (undo-tree-node-marker node))
+      ;; when using lazy drawing, extend tree up and down as required
+      (when undo-tree-visualizer-lazy-drawing
+	(undo-tree-expand-up undo-tree-visualizer-selected-node node)
+	(undo-tree-expand-down undo-tree-visualizer-selected-node node))
+      ;; update diff display, if any
+      (when (and undo-tree-visualizer-diff
+		 (not (eq node undo-tree-visualizer-selected-node)))
+	(undo-tree-visualizer-update-diff node))
+      ;; update selected node
+      (setq undo-tree-visualizer-selected-node node)
+      )))
+
+
+(defun undo-tree-visualizer-mouse-select (pos)
+  "Select undo tree node at mouse event POS."
+  (interactive "@e")
+  (undo-tree-visualizer-select (event-start (nth 1 pos))))
+
 
 
 
