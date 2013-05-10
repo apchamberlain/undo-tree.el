@@ -3960,7 +3960,11 @@ specifies `saved', and a negative prefix argument specifies
 			 (and (or (null x) (eq x 'saved))
 			      (undo-tree-node-unmodified-p current))
 			 ))))
-    (when diff (undo-tree-visualizer-show-diff))))
+    ;; update diff display, if any
+    (when diff
+      (undo-tree-visualizer-show-diff
+       (when undo-tree-visualizer-selection-mode
+	 undo-tree-visualizer-selected-node)))))
 
 
 (defun undo-tree-visualize-redo-to-x (&optional x)
@@ -4008,7 +4012,11 @@ specifies `saved', and a negative prefix argument specifies
 			 (and (or (null x) (eq x 'saved))
 			      (undo-tree-node-unmodified-p current))
 			 ))))
-    (when diff (undo-tree-visualizer-show-diff))))
+    ;; update diff display, if any
+    (when diff
+      (undo-tree-visualizer-show-diff
+       (when undo-tree-visualizer-selection-mode
+	 undo-tree-visualizer-selected-node)))))
 
 
 (defun undo-tree-visualizer-toggle-timestamps ()
