@@ -3264,7 +3264,7 @@ signaling an error if file is not found."
   ;; integer, extend up as far as that line. Otherwise, only extend visible
   ;; portion of tree. NODE is assumed to already have a node marker. Returns
   ;; non-nil if anything was actually extended.
-  (let ((extended nil) parent n)
+  (let ((extended nil) parent)
     ;; don't bother extending if TOP specifies an already-drawn node
     (unless (and (undo-tree-node-p top) (undo-tree-node-marker top))
       (while node
