@@ -845,8 +845,8 @@
 
 (defvar buffer-undo-tree nil
   "Tree of undo entries in current buffer.")
-(make-variable-buffer-local 'buffer-undo-tree)
 (put 'buffer-undo-tree 'permanent-local t)
+(make-variable-buffer-local 'buffer-undo-tree)
 
 
 (defgroup undo-tree nil
@@ -1015,14 +1015,17 @@ in visualizer."
 
 (defvar undo-tree-visualizer-parent-buffer nil
   "Parent buffer in visualizer.")
+(put 'undo-tree-visualizer-parent-buffer 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-parent-buffer)
 
 ;; stores modification time of parent buffer's file, if any
 (defvar undo-tree-visualizer-parent-mtime nil)
+(put 'undo-tree-visualizer-parent-mtime 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-parent-mtime)
 
 ;; stores current horizontal spacing needed for drawing undo-tree
 (defvar undo-tree-visualizer-spacing nil)
+(put 'undo-tree-visualizer-spacing 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-spacing)
 
 ;; calculate horizontal spacing required for drawing tree with current
@@ -1034,16 +1037,20 @@ in visualizer."
 
 ;; holds node that was current when visualizer was invoked
 (defvar undo-tree-visualizer-initial-node nil)
+(put 'undo-tree-visualizer-initial-node 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-initial-node)
 
 ;; holds currently selected node in visualizer selection mode
 (defvar undo-tree-visualizer-selected-node nil)
+(put 'undo-tree-visualizer-selected-node 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-selected)
 
 ;; used to store nodes at edge of currently drawn portion of tree
 (defvar undo-tree-visualizer-needs-extending-down nil)
+(put 'undo-tree-visualizer-needs-extending-down 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-needs-extending-down)
 (defvar undo-tree-visualizer-needs-extending-up nil)
+(put 'undo-tree-visualizer-needs-extending-up 'permanent-local t)
 (make-variable-buffer-local 'undo-tree-visualizer-needs-extending-up)
 
 ;; dynamically bound to t when undoing from visualizer, to inhibit
@@ -3079,12 +3086,12 @@ signaling an error if file is not found."
 	      (setq hash (read (current-buffer)))
 	    (error
 	     (kill-buffer nil)
-	     (funcall (if noerror 'message 'error)
+	     (funcall (if noerror 'message 'user-error)
 		      "Error reading undo-tree history from \"%s\"" filename)
 	     (throw 'load-error nil)))
 	  (unless (string= (sha1 buff) hash)
 	    (kill-buffer nil)
-	    (funcall (if noerror 'message 'error)
+	    (funcall (if noerror 'message 'user-error)
 		     "Buffer has been modified; could not load undo-tree history")
 	    (throw 'load-error nil))
 	  (condition-case nil
@@ -3138,17 +3145,19 @@ signaling an error if file is not found."
 	(display-buffer-mark-dedicated 'soft))
     (switch-to-buffer-other-window
      (get-buffer-create undo-tree-visualizer-buffer-name))
-    (undo-tree-visualizer-mode)
     (setq undo-tree-visualizer-parent-buffer buff)
     (setq undo-tree-visualizer-parent-mtime
 	  (and (buffer-file-name buff)
 	       (nth 5 (file-attributes (buffer-file-name buff)))))
-    (setq buffer-undo-tree undo-tree)
     (setq undo-tree-visualizer-initial-node (undo-tree-current undo-tree))
     (setq undo-tree-visualizer-spacing
 	  (undo-tree-visualizer-calculate-spacing))
     (make-local-variable 'undo-tree-visualizer-timestamps)
     (make-local-variable 'undo-tree-visualizer-diff)
+    (setq buffer-undo-tree undo-tree)
+    (undo-tree-visualizer-mode)
+    ;; FIXME; don't know why `undo-tree-visualizer-mode' clears this
+    (setq buffer-undo-tree undo-tree)
     (set (make-local-variable 'undo-tree-visualizer-lazy-drawing)
 	 (or (eq undo-tree-visualizer-lazy-drawing t)
 	     (and (numberp undo-tree-visualizer-lazy-drawing)
@@ -3161,10 +3170,10 @@ signaling an error if file is not found."
 (defun undo-tree-kill-visualizer (&rest _dummy)
   ;; Kill visualizer. Added to `before-change-functions' hook of original
   ;; buffer when visualizer is invoked.
-  (unless undo-tree-inhibit-kill-visualizer
-    (unwind-protect
-	(with-current-buffer undo-tree-visualizer-buffer-name
-	  (undo-tree-visualizer-quit)))))
+  (unless (or undo-tree-inhibit-kill-visualizer
+	      (null (get-buffer undo-tree-visualizer-buffer-name)))
+    (with-current-buffer undo-tree-visualizer-buffer-name
+      (undo-tree-visualizer-quit))))
 
 
 
@@ -3777,8 +3786,7 @@ Within the undo-tree visualizer, the following keys are available:
   :abbrev-table nil
   (setq truncate-lines t)
   (setq cursor-type nil)
-  (setq undo-tree-visualizer-selected-node nil)
-  (when undo-tree-visualizer-diff (undo-tree-visualizer-update-diff)))
+  (setq undo-tree-visualizer-selected-node nil))
 
 
 
