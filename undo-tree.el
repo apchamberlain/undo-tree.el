@@ -3119,7 +3119,8 @@ signaling an error if file is not found."
 
 (defun undo-tree-load-history-hook ()
   (when (and undo-tree-mode undo-tree-auto-save-history
-	     (not (eq buffer-undo-list t)))
+	     (not (eq buffer-undo-list t))
+	     (not revert-buffer-in-progress-p))
     (undo-tree-load-history nil t)))
 
 
