@@ -3758,7 +3758,7 @@ signaling an error if file is not found."
 	    (concat (make-string (- 9 n) ? ) time)
 	  time))
     ;; absolute time
-    (concat (if current "*" " ")
+    (concat (if current " *" "  ")
 	    (format-time-string "%H:%M:%S" timestamp)
 	    (if register
 		(concat "[" (char-to-string register) "]")
