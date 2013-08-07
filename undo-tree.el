@@ -2592,7 +2592,7 @@ Within the undo-tree visualizer, the following keys are available:
 
   ;; if disabling `undo-tree-mode', rebuild `buffer-undo-list' from tree so
   ;; Emacs undo can work
-  (if (not undo-tree-mode)
+  (when (not undo-tree-mode)
     (undo-list-rebuild-from-tree)
     (setq buffer-undo-tree nil)))
 
