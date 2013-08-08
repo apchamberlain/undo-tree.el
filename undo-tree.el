@@ -883,9 +883,11 @@ when a buffer is saved to file.
 It will automatically load undo history when a buffer is loaded
 from file, if an undo save file exists.
 
-Undo-tree history is saved to a file called
-\".<buffer-file-name>.~undo-tree\" in the same directory as the
-file itself.
+By default, undo-tree history is saved to a file called
+\".<buffer-file-name>.~undo-tree~\" in the same directory as the
+file itself. To save under a different directory, customize
+`undo-tree-history-directory-alist' (see the documentation for
+that variable for details).
 
 WARNING! `undo-tree-auto-save-history' will not work properly in
 Emacs versions prior to 24.3, so it cannot be enabled via
@@ -2984,16 +2986,16 @@ Argument is a character, naming the register."
 
 (defun undo-tree-make-history-save-file-name (file)
   "Create the undo history file name for FILE.
-Normally this is the file's name with `.' prepended and
-`~undo-tree~' appended.
+Normally this is the file's name with \".\" prepended and
+\".~undo-tree~\" appended.
 
-A match for FILE is sought in `undo-tree-history-directory-alist';
-see the documentation of that variable.  If the directory for the
-backup doesn't exist, it is created."
+A match for FILE is sought in `undo-tree-history-directory-alist'
+\(see the documentation of that variable for details\). If the
+directory for the backup doesn't exist, it is created."
   (let* ((backup-directory-alist undo-tree-history-directory-alist)
 	 (name (make-backup-file-name-1 file)))
     (concat (file-name-directory name) "." (file-name-nondirectory name)
-	    "~undo-tree~")))
+	    ".~undo-tree~")))
 
 
 (defun undo-tree-save-history (&optional filename overwrite)
