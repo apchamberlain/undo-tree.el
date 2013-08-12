@@ -3,7 +3,7 @@
 ;; Copyright (C) 2009-2013  Free Software Foundation, Inc
 
 ;; Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
-;; Version: 0.6.4
+;; Version: 0.6.5
 ;; Keywords: convenience, files, undo, redo, history, tree
 ;; URL: http://www.dr-qubit.org/emacs.php
 ;; Repository: http://www.dr-qubit.org/git/undo-tree.git
@@ -3184,6 +3184,8 @@ signaling an error if file is not found."
 		  (undo-tree-current undo-tree)
 		(undo-tree-root undo-tree))))
     (erase-buffer)
+    (setq undo-tree-visualizer-needs-extending-down nil
+	  undo-tree-visualizer-needs-extending-up nil)
     (undo-tree-clear-visualizer-data undo-tree)
     (undo-tree-compute-widths node)
     ;; lazy drawing starts vertically centred and displaced horizontally to
