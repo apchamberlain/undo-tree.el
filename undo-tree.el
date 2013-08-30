@@ -3180,6 +3180,68 @@ signaling an error if file is not found."
 
 (defun undo-tree-draw-tree (undo-tree)
   ;; Draw undo-tree in current buffer starting from NODE (or root if nil).
+
+
+
+;; In the undo-tree visualizer:
+
+;; <up>  p  C-p  (`undo-tree-visualize-undo')
+;;   Undo changes.
+
+;; <down>  n  C-n  (`undo-tree-visualize-redo')
+;;   Redo changes.
+
+;; <left>  b  C-b  (`undo-tree-visualize-switch-branch-left')
+;;   Switch to previous undo-tree branch.
+
+;; <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
+;;   Switch to next undo-tree branch.
+
+;; C-<up>  M-{  (`undo-tree-visualize-undo-to-x')
+;;   Undo changes up to last branch point.
+
+;; C-<down>  M-}  (`undo-tree-visualize-redo-to-x')
+;;   Redo changes down to next branch point.
+
+;; <down>  n  C-n  (`undo-tree-visualize-redo')
+;;   Redo changes.
+
+;; <mouse-1>  (`undo-tree-visualizer-mouse-set')
+;;   Set state to node at mouse click.
+
+;; t  (`undo-tree-visualizer-toggle-timestamps')
+;;   Toggle display of time-stamps.
+
+;; d  (`undo-tree-visualizer-toggle-diff')
+;;   Toggle diff display.
+
+;; s  (`undo-tree-visualizer-selection-mode')
+;;   Toggle keyboard selection mode.
+
+;; q  (`undo-tree-visualizer-quit')
+;;   Quit undo-tree-visualizer.
+
+;; C-q  (`undo-tree-visualizer-abort')
+;;   Abort undo-tree-visualizer.
+
+;; ,  <
+;;   Scroll left.
+
+;; .  >
+;;   Scroll right.
+
+;; <pgup>  M-v
+;;   Scroll up.
+
+;; <pgdown>  C-v
+;;   Scroll down.
+
+
+
+;; TODO: something like this, but in the right places to be persistent.
+;;  (message "p n b f M-{ M-} n t d s q C-q , . M-v C-v or h for help")
+
+
   (let ((node (if undo-tree-visualizer-lazy-drawing
 		  (undo-tree-current undo-tree)
 		(undo-tree-root undo-tree))))
@@ -4100,6 +4162,54 @@ specifies `saved', and a negative prefix argument specifies
   "Toggle mode to select nodes in undo-tree visualizer."
   :lighter "Select"
   :keymap undo-tree-visualizer-selection-mode-map
+
+
+;; In visualizer selection mode:
+
+;; <up>  p  C-p  (`undo-tree-visualizer-select-previous')
+;;   Select previous node.
+
+;; <down>  n  C-n  (`undo-tree-visualizer-select-next')
+;;   Select next node.
+
+;; <left>  b  C-b  (`undo-tree-visualizer-select-left')
+;;   Select left sibling node.
+
+;; <right>  f  C-f  (`undo-tree-visualizer-select-right')
+;;   Select right sibling node.
+
+;; <pgup>  M-v
+;;   Select node 10 above.
+
+;; <pgdown>  C-v
+;;   Select node 10 below.
+
+;; <enter>  (`undo-tree-visualizer-set')
+;;   Set state to selected node and exit selection mode.
+
+;; s  (`undo-tree-visualizer-mode')
+;;   Exit selection mode.
+
+;; t  (`undo-tree-visualizer-toggle-timestamps')
+;;   Toggle display of time-stamps.
+
+;; d  (`undo-tree-visualizer-toggle-diff')
+;;   Toggle diff display.
+
+;; q  (`undo-tree-visualizer-quit')
+;;   Quit undo-tree-visualizer.
+
+;; C-q  (`undo-tree-visualizer-abort')
+;;   Abort undo-tree-visualizer.
+
+;; ,  <
+;;   Scroll left.
+
+;; .  >
+;;   Scroll right.
+
+
+
   :group undo-tree
   (cond
    ;; enable selection mode
