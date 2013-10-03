@@ -1,4 +1,4 @@
-# Credits
+ Credits
 Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
 
 Version: 0.6.4
@@ -311,21 +311,21 @@ linearly. So as soon as you make that new edit, it discards the old
 branch. Emacs' undo just keeps adding changes to the end of the string. So
 the undo history in the two systems now looks like this:
 
-           Undo/Redo:                      Emacs' undo
+			  Undo/Redo:                      Emacs' undo
 
-              o                                o
-              |                                |
-              |                                |
-              o                                o  o
-              .\                               |  |\
-              . \                              |  | \
-              .  x  (new edit)                 o  o  |
-  (discarded  .                                | /   |
-    branch)   .                                |/    |
-              .                                o     |
-                                                     |
-                                                     |
-                                                     x  (new edit)
+				 o                                o
+				 |                                |
+				 |                                |
+				 o                                o  o
+				 .\                               |  |\
+				 . \                              |  | \
+				 .  x  (new edit)                 o  o  |
+	 (discarded  .                                | /   |
+	   branch)   .                                |/    |
+				 .                                o     |
+														|
+														|
+														x  (new edit)
 
 Now, what if you change your mind about those undos, and decide you did
 like those other changes you'd made after all? With the standard undo/redo
@@ -648,7 +648,7 @@ Redoing takes you back down the undo tree, as usual (as long as you haven't
 changed the active region after undoing-in-region, it doesn't matter if it
 is still active):
 
-                      o
+             o
 			 |\
 			 | \
 			 o  o
