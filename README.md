@@ -34,8 +34,8 @@ This package has only been tested with Emacs versions 24 and CVS. It should
 work in Emacs versions 22 and 23 too, but will not work without
 modifications in earlier versions of Emacs.
 
-To install `undo-tree-mode', make sure this file is saved in a directory in
-your `load-path', and add the line:
+To install `undo-tree-mode`, make sure this file is saved in a directory in
+your `load-path`, and add the line:
 
     (require 'undo-tree)
 
@@ -59,70 +59,70 @@ without bothering to first figure out whether the button on the left dips
 the headlights or operates the ejector seat (after all, you'll soon figure
 it out when you push it), then here's the minimum you need to know:
 
-    `undo-tree-mode` and `global-undo-tree-mode'
+    `undo-tree-mode` and `global-undo-tree-mode`
       Enable undo-tree mode (either in the current buffer or globally).
 
-    C-_  C-/  (`undo-tree-undo')
+    C-_  C-/  (`undo-tree-undo`)
       Undo changes.
 
-    M-_  C-?  (`undo-tree-redo')
+    M-_  C-?  (`undo-tree-redo`)
       Redo changes.
 
-    `undo-tree-switch-branch'
+    `undo-tree-switch-branch`
       Switch undo-tree branch.
       (What does this mean? Better press the button and see!)
 
-    C-x u  (`undo-tree-visualize')
+    C-x u  (`undo-tree-visualize`)
       Visualize the undo tree.
       (Better try pressing this button too!)
 
-    C-x r u  (`undo-tree-save-state-to-register')
+    C-x r u  (`undo-tree-save-state-to-register`)
       Save current buffer state to register.
 
-    C-x r U  (`undo-tree-restore-state-from-register')
+    C-x r U  (`undo-tree-restore-state-from-register`)
       Restore buffer state from register.
 
 
 
 In the undo-tree visualizer:
 
-    <up>  p  C-p  (`undo-tree-visualize-undo')
+    <up>  p  C-p  (`undo-tree-visualize-undo`)
       Undo changes.
 
-    <down>  n  C-n  (`undo-tree-visualize-redo')
+    <down>  n  C-n  (`undo-tree-visualize-redo`)
       Redo changes.
 
-    <left>  b  C-b  (`undo-tree-visualize-switch-branch-left')
+    <left>  b  C-b  (`undo-tree-visualize-switch-branch-left`)
       Switch to previous undo-tree branch.
 
-    <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
+    <right>  f  C-f  (`undo-tree-visualize-switch-branch-right`)
       Switch to next undo-tree branch.
 
-    C-<up>  M-{  (`undo-tree-visualize-undo-to-x')
+    C-<up>  M-{  (`undo-tree-visualize-undo-to-x`)
       Undo changes up to last branch point.
 
-    C-<down>  M-}  (`undo-tree-visualize-redo-to-x')
+    C-<down>  M-}  (`undo-tree-visualize-redo-to-x`)
       Redo changes down to next branch point.
 
-    <down>  n  C-n  (`undo-tree-visualize-redo')
+    <down>  n  C-n  (`undo-tree-visualize-redo`)
       Redo changes.
 
-    <mouse-1>  (`undo-tree-visualizer-mouse-set')
+    <mouse-1>  (`undo-tree-visualizer-mouse-set`)
       Set state to node at mouse click.
 
-    t  (`undo-tree-visualizer-toggle-timestamps')
+    t  (`undo-tree-visualizer-toggle-timestamps`)
       Toggle display of time-stamps.
 
-    d  (`undo-tree-visualizer-toggle-diff')
+    d  (`undo-tree-visualizer-toggle-diff`)
       Toggle diff display.
 
-    s  (`undo-tree-visualizer-selection-mode')
+    s  (`undo-tree-visualizer-selection-mode`)
       Toggle keyboard selection mode.
 
-    q  (`undo-tree-visualizer-quit')
+    q  (`undo-tree-visualizer-quit`)
       Quit undo-tree-visualizer.
 
-    C-q  (`undo-tree-visualizer-abort')
+    C-q  (`undo-tree-visualizer-abort`)
       Abort undo-tree-visualizer.
 
     ,  <
@@ -141,16 +141,16 @@ In the undo-tree visualizer:
 
 In visualizer selection mode:
 
-    <up>  p  C-p  (`undo-tree-visualizer-select-previous')
+    <up>  p  C-p  (`undo-tree-visualizer-select-previous`)
       Select previous node.
 
-    <down>  n  C-n  (`undo-tree-visualizer-select-next')
+    <down>  n  C-n  (`undo-tree-visualizer-select-next`)
       Select next node.
 
-    <left>  b  C-b  (`undo-tree-visualizer-select-left')
+    <left>  b  C-b  (`undo-tree-visualizer-select-left`)
       Select left sibling node.
 
-    <right>  f  C-f  (`undo-tree-visualizer-select-right')
+    <right>  f  C-f  (`undo-tree-visualizer-select-right`)
       Select right sibling node.
 
     <pgup>  M-v
@@ -159,22 +159,22 @@ In visualizer selection mode:
     <pgdown>  C-v
       Select node 10 below.
 
-    <enter>  (`undo-tree-visualizer-set')
+    <enter>  (`undo-tree-visualizer-set`)
       Set state to selected node and exit selection mode.
 
-    s  (`undo-tree-visualizer-mode')
+    s  (`undo-tree-visualizer-mode`)
       Exit selection mode.
 
-    t  (`undo-tree-visualizer-toggle-timestamps')
+    t  (`undo-tree-visualizer-toggle-timestamps`)
       Toggle display of time-stamps.
 
-    d  (`undo-tree-visualizer-toggle-diff')
+    d  (`undo-tree-visualizer-toggle-diff`)
       Toggle diff display.
 
-    q  (`undo-tree-visualizer-quit')
+    q  (`undo-tree-visualizer-quit`)
       Quit undo-tree-visualizer.
 
-    C-q  (`undo-tree-visualizer-abort')
+    C-q  (`undo-tree-visualizer-abort`)
       Abort undo-tree-visualizer.
 
     ,  <
@@ -204,8 +204,8 @@ Note: Requires Emacs version 24.3 or higher.
 Compressing undo history:
 
   Undo history files cannot grow beyond the maximum undo tree size, which
-  is limited by `undo-limit', `undo-strong-limit` and
-  `undo-outer-limit'. Nevertheless, undo history files can grow quite
+  is limited by `undo-limit`, `undo-strong-limit` and
+  `undo-outer-limit`. Nevertheless, undo history files can grow quite
   large. If you want to automatically compress undo history, add the
   following advice to your .emacs file (replacing ".gz" with the filename
   extension of your favourite compression algorithm):
