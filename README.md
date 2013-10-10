@@ -1,5 +1,6 @@
- Credits
-Author: Toby Cubitt <toby-undo-tree@dr-qubit.org>
+# Credits
+
+Original author: Toby Cubitt *toby-undo-tree@dr-qubit.org*
 
 Version: 0.6.4
 
