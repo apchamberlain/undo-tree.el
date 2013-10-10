@@ -3177,71 +3177,27 @@ signaling an error if file is not found."
       (undo-tree-visualizer-quit))))
 
 
+(defun undo-tree-show-help () 
+  (let ((msg (if (and (fboundp 'undo-tree-minibuffer-help-dynamic) 
+		      undo-tree-minibuffer-help-dynamic)
+		 () ; TODO: look at keymap
+	       (concat "d = toggle diffs, "
+		       "s = toggle selection, "
+		       "t = toggle timestamps, "
+		       "q = quit at current history point, "
+		       "<ctrl> q = abort"))))
+	;  TODO: (if undo-tree-show-help-in-visualize-buffer
+	  ; (save-excursion
+	  ; move to lowest visible line
+	  ; insert this text instead of messaging
+	  ; only if we haven't just printed another message
+	  ; with user-error or user-friendly
+    (if (current-message) ()
+      (message msg))))
+
 
 (defun undo-tree-draw-tree (undo-tree)
   ;; Draw undo-tree in current buffer starting from NODE (or root if nil).
-
-
-
-;; In the undo-tree visualizer:
-
-;; <up>  p  C-p  (`undo-tree-visualize-undo')
-;;   Undo changes.
-
-;; <down>  n  C-n  (`undo-tree-visualize-redo')
-;;   Redo changes.
-
-;; <left>  b  C-b  (`undo-tree-visualize-switch-branch-left')
-;;   Switch to previous undo-tree branch.
-
-;; <right>  f  C-f  (`undo-tree-visualize-switch-branch-right')
-;;   Switch to next undo-tree branch.
-
-;; C-<up>  M-{  (`undo-tree-visualize-undo-to-x')
-;;   Undo changes up to last branch point.
-
-;; C-<down>  M-}  (`undo-tree-visualize-redo-to-x')
-;;   Redo changes down to next branch point.
-
-;; <down>  n  C-n  (`undo-tree-visualize-redo')
-;;   Redo changes.
-
-;; <mouse-1>  (`undo-tree-visualizer-mouse-set')
-;;   Set state to node at mouse click.
-
-;; t  (`undo-tree-visualizer-toggle-timestamps')
-;;   Toggle display of time-stamps.
-
-;; d  (`undo-tree-visualizer-toggle-diff')
-;;   Toggle diff display.
-
-;; s  (`undo-tree-visualizer-selection-mode')
-;;   Toggle keyboard selection mode.
-
-;; q  (`undo-tree-visualizer-quit')
-;;   Quit undo-tree-visualizer.
-
-;; C-q  (`undo-tree-visualizer-abort')
-;;   Abort undo-tree-visualizer.
-
-;; ,  <
-;;   Scroll left.
-
-;; .  >
-;;   Scroll right.
-
-;; <pgup>  M-v
-;;   Scroll up.
-
-;; <pgdown>  C-v
-;;   Scroll down.
-
-
-
-;; TODO: something like this, but in the right places to be persistent.
-;;  (message "p n b f M-{ M-} n t d s q C-q , . M-v C-v or h for help")
-
-
   (let ((node (if undo-tree-visualizer-lazy-drawing
 		  (undo-tree-current undo-tree)
 		(undo-tree-root undo-tree))))
@@ -3288,21 +3244,14 @@ signaling an error if file is not found."
     ;; highlight current node
     (undo-tree-draw-node (undo-tree-current undo-tree) 'current))
 
-	; if the "show help" variable is set
-  (add-hook 'post-command-hook
-	    (lambda ()
-	  ;		(save-excursion
-	  ; move to lowest visible line
-	  ; insert this text instead of messaging
-	  ; only if we haven't just printed another message
-	  ; with user-error or user-friendly
-	      (if (current-message) ()
-		(message (concat "d = toggle diffs, "
-				 "s = toggle selection, "
-				 "t = toggle timestamps, "
-				 "q = quit at current history point, "
-				 "<ctrl> q = abort"))))
-	    "at-end" "local-to-buffer"))
+  (if (and (fboundp 'undo-tree-show-minibuffer-help) 
+	   undo-tree-show-minibuffer-help)
+      (progn (remove-hook 'post-command-hook
+			  'undo-tree-show-help
+			  "local-to-buffer")
+	     (add-hook 'post-command-hook
+		       'undo-tree-show-help
+		       "at-end" "local-to-buffer"))))
 
 
 (defun undo-tree-extend-down (node &optional bottom)

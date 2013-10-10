@@ -52,6 +52,10 @@ adding:
 to your .emacs file.
 
 
+
+
+
+
 Quick-Start
 ===========
 
@@ -85,7 +89,7 @@ it out when you push it), then here's the minimum you need to know:
 
 
 
-In the undo-tree visualizer:
+**In the undo-tree visualizer:**
 
     <up>  p  C-p  (`undo-tree-visualize-undo`)
       Undo changes.
@@ -140,7 +144,7 @@ In the undo-tree visualizer:
 
 
 
-In visualizer selection mode:
+**In visualizer selection mode:**
 
     <up>  p  C-p  (`undo-tree-visualizer-select-previous`)
       Select previous node.
@@ -185,8 +189,30 @@ In visualizer selection mode:
       Scroll right.
 
 
+### On-screen help
 
-Persistent undo history:
+
+(Experimental additions to your `.emacs` or other init file)
+
+To show a quick reference to the most important undo-tree-mode
+commands in the minibuffer when the *undo-tree* buffer is active:
+
+	(setq undo-tree-show-minibuffer-help t)
+
+To show the same help in the visualizer buffer itself (not currently
+implemented):
+
+	(setq undo-tree-show-help-in-visualize-buffer t)
+
+To ensure that the help display tracks any changes in keybindings you
+have made (not currently implemented):
+
+	(setq undo-tree-minibuffer-help-dynamic t)
+
+
+
+
+### Persistent undo history
 
 Note: Requires Emacs version 24.3 or higher.
 
@@ -202,7 +228,7 @@ Note: Requires Emacs version 24.3 or higher.
 
 
 
-Compressing undo history:
+#### Compressing undo history
 
   Undo history files cannot grow beyond the maximum undo tree size, which
   is limited by `undo-limit`, `undo-strong-limit` and
@@ -566,7 +592,7 @@ you want to customize the diff display.)
 Finally, hitting "q" will quit the visualizer, leaving the parent buffer in
 whatever state you ended at. Hitting "C-q" will abort the visualizer,
 returning the parent buffer to whatever state it was originally in when the
-visualizer was .
+visualizer was opened.
 
 
 
