@@ -3286,7 +3286,23 @@ signaling an error if file is not found."
        (or undo-tree-visualizer-needs-extending-up
 	   (undo-tree-root undo-tree))))
     ;; highlight current node
-    (undo-tree-draw-node (undo-tree-current undo-tree) 'current)))
+    (undo-tree-draw-node (undo-tree-current undo-tree) 'current))
+
+	; if the "show help" variable is set
+  (add-hook 'post-command-hook
+	    (lambda ()
+	  ;		(save-excursion
+	  ; move to lowest visible line
+	  ; insert this text instead of messaging
+	  ; only if we haven't just printed another message
+	  ; with user-error or user-friendly
+	      (if (current-message) ()
+		(message (concat "d = toggle diffs, "
+				 "s = toggle selection, "
+				 "t = toggle timestamps, "
+				 "q = quit at current history point, "
+				 "<ctrl> q = abort"))))
+	    "at-end" "local-to-buffer"))
 
 
 (defun undo-tree-extend-down (node &optional bottom)
